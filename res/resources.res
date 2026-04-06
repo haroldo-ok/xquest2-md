@@ -16,54 +16,54 @@ IMAGE   img_title       "screens/title_screen.png"  BEST
 
 # --- SPRITES ---
 # Player ship  (16x16, PAL1, 8 direction frames)
-SPRITE  spr_ship        "sprites/ship_player_00.png"          2 2 FAST  0
-SPRITE  spr_ship_thrust "sprites/ship_player_thrust_00.png"   2 2 FAST  0
-SPRITE  spr_ship_diag   "sprites/ship_player_diagonal_00.png" 2 2 FAST  0
+SPRITE  spr_ship        "sprites/ship_player_00.png"          2 2 1
+SPRITE  spr_ship_thrust "sprites/ship_player_thrust_00.png"   2 2 1
+SPRITE  spr_ship_diag   "sprites/ship_player_diagonal_00.png" 2 2 1
 
 # Gem (16x16, PAL2, 4 animation frames)
-SPRITE  spr_gem         "sprites/gem_00.png"          2 2 SLOW  0
+SPRITE  spr_gem         "sprites/gem_00.png"          2 2 8
 
 # Mine (16x16, PAL1, 5 animation frames)
-SPRITE  spr_mine        "sprites/mine_f0_00.png"      2 2 SLOW  0
+SPRITE  spr_mine        "sprites/mine_f0_00.png"      2 2 8
 
 # Exit Gate (16x16, PAL2, 9 frame open animation)
-SPRITE  spr_gate        "sprites/gate_exit_f0_00.png" 2 2 SLOW  0
+SPRITE  spr_gate        "sprites/gate_exit_f0_00.png" 2 2 8
 
 # PowerCharge pickup (16x16, PAL2)
-SPRITE  spr_powercharge "sprites/item_powercharge_00.png" 2 2 SLOW 0
+SPRITE  spr_powercharge "sprites/item_powercharge_00.png" 2 2 8
 
 # SmartBomb effect (16x16, PAL3, 2 frames)
-SPRITE  spr_smartbomb   "sprites/fx_smartbomb_f0_00.png"  2 2 FAST 0
+SPRITE  spr_smartbomb   "sprites/fx_smartbomb_f0_00.png"  2 2 1
 
 # Explosion (16x16, PAL3, 3 frames)
-SPRITE  spr_explosion   "sprites/fx_explosion_f0_00.png"  2 2 FAST 0
+SPRITE  spr_explosion   "sprites/fx_explosion_f0_00.png"  2 2 1
 
 # Bullets
-SPRITE  spr_bullet_player "sprites/bullet_player_00.png"      2 2 FAST 0
-SPRITE  spr_bullet_green  "sprites/bullet_enemy_green_00.png" 2 2 FAST 0
-SPRITE  spr_bullet_yellow "sprites/bullet_enemy_yellow_00.png" 2 2 FAST 0
+SPRITE  spr_bullet_player "sprites/bullet_player_00.png"      2 2 1
+SPRITE  spr_bullet_green  "sprites/bullet_enemy_green_00.png" 2 2 1
+SPRITE  spr_bullet_yellow "sprites/bullet_enemy_yellow_00.png" 2 2 1
 
 # --- ENEMIES ---
 # Meeby (24 frames = 12 rotation positions x 2 anim frames)
-SPRITE  spr_meeby       "sprites/enemy_meeby_00.png"      2 2 NORMAL 0
+SPRITE  spr_meeby       "sprites/enemy_meeby_00.png"      2 2 4
 # Grunger (6 frames)
-SPRITE  spr_grunger     "sprites/enemy_grunger_00.png"    2 2 NORMAL 0
+SPRITE  spr_grunger     "sprites/enemy_grunger_00.png"    2 2 4
 # Zippo (4 frames)
-SPRITE  spr_zippo       "sprites/enemy_zippo_00.png"      2 2 FAST   0
+SPRITE  spr_zippo       "sprites/enemy_zippo_00.png"      2 2 1
 # Tribbler (10 frames - splits when shot)
-SPRITE  spr_tribbler    "sprites/enemy_tribbler_00.png"   2 2 NORMAL 0
+SPRITE  spr_tribbler    "sprites/enemy_tribbler_00.png"   2 2 4
 # Retaliator (1 frame, shoots back)
-SPRITE  spr_retaliator  "sprites/enemy_retaliator_00.png" 2 2 NORMAL 0
+SPRITE  spr_retaliator  "sprites/enemy_retaliator_00.png" 2 2 4
 # Terrier (3 frames)
-SPRITE  spr_terrier     "sprites/enemy_terrier_00.png"    2 2 FAST   0
+SPRITE  spr_terrier     "sprites/enemy_terrier_00.png"    2 2 1
 # Sticktight (3 frames)
-SPRITE  spr_sticktight  "sprites/enemy_sticktight_00.png" 2 2 NORMAL 0
+SPRITE  spr_sticktight  "sprites/enemy_sticktight_00.png" 2 2 4
 # Doinger (1 frame)
-SPRITE  spr_doinger     "sprites/enemy_doinger_00.png"    2 2 NORMAL 0
+SPRITE  spr_doinger     "sprites/enemy_doinger_00.png"    2 2 4
 # Vince (1 frame, nearly invulnerable)
-SPRITE  spr_vince       "sprites/enemy_vince_00.png"      2 2 NORMAL 0
+SPRITE  spr_vince       "sprites/enemy_vince_00.png"      2 2 4
 # Miner (1 frame, lays mines)
-SPRITE  spr_miner       "sprites/enemy_miner_00.png"      2 2 NORMAL 0
+SPRITE  spr_miner       "sprites/enemy_miner_00.png"      2 2 4
 
 # --- SOUND EFFECTS ---
 # All at 8000 Hz, 8-bit unsigned PCM (negate: XOR 0x80 for SGDK signed)

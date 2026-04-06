@@ -15,8 +15,34 @@
  * GLOBAL STATE
  * ============================================================ */
 GameData gd;           /* global (accessed by screens.c pause quit) */
-static u32 frame_count;
+u32 g_frame_count;     /* global frame counter, used by AI in enemy.c */
 u8 g_two_player = FALSE;   /* defined here, declared extern in player2.h */
+
+/* ============================================================
+ * 8-DIRECTION VELOCITY TABLES
+ * Order: RIGHT, UP_RIGHT, UP, UP_LEFT, LEFT, DOWN_LEFT, DOWN, DOWN_RIGHT
+ * Approximated unit vectors in fix16 (scaled to ~1.0).
+ * ============================================================ */
+const fix16 DIR_DVX[8] = {
+    FIX16( 1.000f),   /* RIGHT */
+    FIX16( 0.707f),   /* UP_RIGHT */
+    FIX16( 0.000f),   /* UP */
+    FIX16(-0.707f),   /* UP_LEFT */
+    FIX16(-1.000f),   /* LEFT */
+    FIX16(-0.707f),   /* DOWN_LEFT */
+    FIX16( 0.000f),   /* DOWN */
+    FIX16( 0.707f),   /* DOWN_RIGHT */
+};
+const fix16 DIR_DVY[8] = {
+    FIX16( 0.000f),   /* RIGHT */
+    FIX16(-0.707f),   /* UP_RIGHT */
+    FIX16(-1.000f),   /* UP */
+    FIX16(-0.707f),   /* UP_LEFT */
+    FIX16( 0.000f),   /* LEFT */
+    FIX16( 0.707f),   /* DOWN_LEFT */
+    FIX16( 1.000f),   /* DOWN */
+    FIX16( 0.707f),   /* DOWN_RIGHT */
+};
 
 /* ============================================================
  * FORWARD DECLARATIONS
@@ -79,7 +105,7 @@ static void sys_init(void)
     /* Random seed from VDP counter */
     random_init(GET_VCOUNTER);
 
-    frame_count = 0;
+    g_frame_count = 0;
 }
 
 /* ============================================================
@@ -137,7 +163,7 @@ void game_run(void)
     while (gd.state == STATE_GAME || gd.state == STATE_PAUSED)
     {
         SYS_doVBlankProcess();
-        frame_count++;
+        g_frame_count++;
 
         u16 joy = JOY_readJoypad(JOY_1);
 

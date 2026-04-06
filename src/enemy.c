@@ -198,7 +198,7 @@ static void ai_zinger(Enemy *e, GameData *gd)
         sfx_play(SFX_ENEMY_SHOOT);
     }
     /* Random movement */
-    if ((frame_count & 0x1F) == 0)
+    if ((g_frame_count & 0x1F) == 0)
     {
         e->vx = FIX16_FROM_FLOAT((random() % 200 - 100) * 0.015f);
         e->vy = FIX16_FROM_FLOAT((random() % 200 - 100) * 0.015f);
@@ -254,7 +254,7 @@ static void ai_terrier(Enemy *e, GameData *gd)
     if (e->ai_state == 0)
     {
         /* Idle: random wander */
-        if ((frame_count & 0x3F) == 0)
+        if ((g_frame_count & 0x3F) == 0)
         {
             e->vx = FIX16_FROM_FLOAT((random() % 100 - 50) * 0.02f);
             e->vy = FIX16_FROM_FLOAT((random() % 100 - 50) * 0.02f);
@@ -281,7 +281,7 @@ static void ai_doinger(Enemy *e, GameData *gd)
 
     /* Fires bullets at intervals that shorten over time */
     u16 fire_interval = MAX(60 - e->ai_timer / 10, 15);
-    if ((frame_count % fire_interval) == 0)
+    if ((g_frame_count % fire_interval) == 0)
     {
         fix16 spd = FIX16(2.0);
         fix16 dx = fix16Sub(gd->player.x, e->x);
@@ -315,7 +315,7 @@ static void ai_snipe(Enemy *e, GameData *gd)
         }
     }
     /* Slight drift */
-    if ((frame_count & 0x7F) == 0)
+    if ((g_frame_count & 0x7F) == 0)
     {
         e->vx = FIX16_FROM_FLOAT((random() % 60 - 30) * 0.01f);
         e->vy = FIX16_FROM_FLOAT((random() % 60 - 30) * 0.01f);
@@ -397,7 +397,7 @@ static void ai_repulsor(Enemy *e, GameData *gd)
     }
 
     /* Repulsor itself drifts slowly */
-    if ((frame_count & 0x1F) == 0)
+    if ((g_frame_count & 0x1F) == 0)
         move_toward(e, gd->player.x, gd->player.y, FIX16(0.3));
 }
 
@@ -449,7 +449,11 @@ void enemies_update(GameData *gd)
         if (e->anim_timer >= 8)
         {
             e->anim_timer = 0;
-            e->anim_frame = (e->anim_frame + 1) % SPR_getAnimationDef(e->spr, 0)->numFrame;
+            /* Advance frame, wrapping at the animation's frame count.
+             * We read numFrame from the SpriteDefinition directly since
+             * SPR_getAnimationDef does not exist in SGDK 1.70. */
+            u16 num_frames = ENEMY_SPR[e->type]->animations[0]->numFrame;
+            e->anim_frame = (e->anim_frame + 1) % num_frames;
             SPR_setFrame(e->spr, e->anim_frame);
         }
 

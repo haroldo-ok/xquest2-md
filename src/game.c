@@ -440,7 +440,7 @@ static const u8 *SFX_TABLE[] = {
     sfx_5, sfx_6, sfx_7, sfx_8
 };
 
-/* Size table - rescomp WAV generates a <name>_size constant for each entry */
+/* Size table - rescomp WAV generates a <n>_size constant for each entry */
 static const u32 SFX_SIZE_TABLE[] = {
     sfx_0_size, sfx_1_size, sfx_2_size, sfx_3_size, sfx_4_size,
     sfx_5_size, sfx_6_size, sfx_7_size, sfx_8_size

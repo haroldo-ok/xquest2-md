@@ -66,16 +66,17 @@ SPRITE  spr_vince       "sprites/enemy_vince_00.png"      2 2 NONE
 SPRITE  spr_miner       "sprites/enemy_miner_00.png"      2 2 NONE
 
 # --- SOUND EFFECTS ---
-# All at 8000 Hz, 8-bit unsigned PCM (negate: XOR 0x80 for SGDK signed)
-SOUND   sfx_0   "sounds/snd_00_music_intro.wav"   DPCM
-SOUND   sfx_1   "sounds/snd_01_music_loop_a.wav"  DPCM
-SOUND   sfx_2   "sounds/snd_02_music_loop_b.wav"  DPCM
-SOUND   sfx_3   "sounds/snd_03_music_loop_c.wav"  DPCM
-SOUND   sfx_4   "sounds/snd_04_music_loop_d.wav"  DPCM
-SOUND   sfx_5   "sounds/snd_05_sfx_burst_a.wav"   DPCM
-SOUND   sfx_6   "sounds/snd_06_sfx_burst_b.wav"   DPCM
-SOUND   sfx_7   "sounds/snd_07_sfx_sweep.wav"     DPCM
-SOUND   sfx_8   "sounds/snd_08_sfx_short_a.wav"   DPCM
+# All converted to 8-bit signed PCM at 8000 Hz via rescomp WAV driver 0 (PCM).
+# Use SND_startPlay_PCM(sfx_N, sfx_N_size, SOUND_PCM_CH1, FALSE) to play.
+WAV     sfx_0   "sounds/snd_00_music_intro.wav"   0 8000
+WAV     sfx_1   "sounds/snd_01_music_loop_a.wav"  0 8000
+WAV     sfx_2   "sounds/snd_02_music_loop_b.wav"  0 8000
+WAV     sfx_3   "sounds/snd_03_music_loop_c.wav"  0 8000
+WAV     sfx_4   "sounds/snd_04_music_loop_d.wav"  0 8000
+WAV     sfx_5   "sounds/snd_05_sfx_burst_a.wav"   0 8000
+WAV     sfx_6   "sounds/snd_06_sfx_burst_b.wav"   0 8000
+WAV     sfx_7   "sounds/snd_07_sfx_sweep.wav"     0 8000
+WAV     sfx_8   "sounds/snd_08_sfx_short_a.wav"   0 8000
 
 # --- BACKGROUND TILESET ---
 # 136 subtiles of 8x8 = 34 logical 16x16 tiles (wall, wall-edge, floor, cyan-floor)

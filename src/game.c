@@ -439,6 +439,13 @@ static const u8 *SFX_TABLE[] = {
     sfx_0, sfx_1, sfx_2, sfx_3, sfx_4,
     sfx_5, sfx_6, sfx_7, sfx_8
 };
+
+/* Size table - rescomp WAV generates a <name>_size constant for each entry */
+static const u32 SFX_SIZE_TABLE[] = {
+    sfx_0_size, sfx_1_size, sfx_2_size, sfx_3_size, sfx_4_size,
+    sfx_5_size, sfx_6_size, sfx_7_size, sfx_8_size
+};
+
 #define SFX_COUNT 9
 
 void sfx_init(void)
@@ -449,8 +456,19 @@ void sfx_init(void)
 void sfx_play(u8 sfx_id)
 {
     if (sfx_id >= SFX_COUNT) return;
-    /* XGM/SFX channel - use channel 0 for now */
-    SND_startPlay_PCM(SFX_TABLE[sfx_id], 0, SOUND_PCM_CH1, FALSE);
+    SND_startPlay_PCM(SFX_TABLE[sfx_id], SFX_SIZE_TABLE[sfx_id], SOUND_PCM_CH1, FALSE);
+}
+
+void sfx_play_sustained(u8 sfx_id)
+{
+    if (sfx_id >= SFX_COUNT) return;
+    SND_startPlay_PCM(SFX_TABLE[sfx_id], SFX_SIZE_TABLE[sfx_id], SOUND_PCM_CH2, FALSE);
+}
+
+void sfx_stop(void)
+{
+    SND_stopPlay_PCM(SOUND_PCM_CH1);
+    SND_stopPlay_PCM(SOUND_PCM_CH2);
 }
 
 /* ============================================================

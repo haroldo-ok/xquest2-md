@@ -19,7 +19,7 @@
 #include "player2.h"
 
 /* Global two-player flag — set by the options screen */
-u8 g_two_player = FALSE;
+extern u8 g_two_player;  /* defined in main.c */
 
 /* Player 2 data lives alongside Player 1 in GameData.
  * We extend GameData.player2 instead of the scaffold's

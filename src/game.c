@@ -449,15 +449,15 @@ static u32 sfx_get_size(u8 id)
 {
     switch (id)
     {
-        case 0: return sfx_0_size;
-        case 1: return sfx_1_size;
-        case 2: return sfx_2_size;
-        case 3: return sfx_3_size;
-        case 4: return sfx_4_size;
-        case 5: return sfx_5_size;
-        case 6: return sfx_6_size;
-        case 7: return sfx_7_size;
-        case 8: return sfx_8_size;
+        case 0: return sizeof(sfx_0);
+        case 1: return sizeof(sfx_1);
+        case 2: return sizeof(sfx_2);
+        case 3: return sizeof(sfx_3);
+        case 4: return sizeof(sfx_4);
+        case 5: return sizeof(sfx_5);
+        case 6: return sizeof(sfx_6);
+        case 7: return sizeof(sfx_7);
+        case 8: return sizeof(sfx_8);
         default: return 0;
     }
 }

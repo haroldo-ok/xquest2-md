@@ -77,8 +77,8 @@ const DifficultySettings difficulty_table[DIFFICULTY_COUNT] =
 static u8 g_difficulty = DIFFICULTY_NORMAL;
 
 /* Hall of Fame table in WRAM */
-static HofEntry g_hof[HOF_MAX_ENTRIES];
-static u8       g_hof_initialised = FALSE;
+HofEntry g_hof[HOF_MAX_ENTRIES];
+u8 g_hof_initialised = FALSE;
 
 /* ────────────────────────────────────────────────
  * HOF helpers

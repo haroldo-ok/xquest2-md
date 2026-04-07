@@ -77,7 +77,7 @@ static void sys_init(void)
     VDP_setBackgroundColor(0);
 
     /* Random seed from VDP counter */
-    SYS_setRandomSeed(GET_VCOUNTER);
+    setRandomSeed(GET_VCOUNTER);
 
     g_frame_count = 0;
 }

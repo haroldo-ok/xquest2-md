@@ -65,7 +65,7 @@ int main(bool hard_reset)
 static void sys_init(void)
 {
     /* Initialise SGDK sprite engine with 512 VRAM tiles reserved */
-    SPR_initEx(512, 0);
+    SPR_initEx(512);
 
     /* Set display to hi-res mode (320×224) */
     VDP_setScreenWidth320();

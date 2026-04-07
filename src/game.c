@@ -18,6 +18,7 @@
 #include "screens.h"
 #include "player2.h"
 #include "sfx.h"
+#include "enemy_variants.h"
 #include "resources.h"
 
 /* ============================================================
@@ -91,7 +92,7 @@ void collision_check_all(GameData *gd)
                 case 0: p->smartbombs = MIN(p->smartbombs+1, MAX_SMARTBOMBS); break;
                 case 1: p->score += 1000;   break;
                 case 2: p->lives  = MIN(p->lives+1, 9); break;
-                case 3: p->invincible = 300; break;  /* temporary shield */
+                case 3: p->invincible = 255; break;  /* temporary shield (~4 sec) */
                 case 4: p->shoot_cooldown = 0; break; /* rapid fire brief burst */
             }
             pc->active = FALSE;
@@ -440,13 +441,26 @@ static const u8 *SFX_TABLE[] = {
     sfx_5, sfx_6, sfx_7, sfx_8
 };
 
-/* Size table - rescomp WAV generates a <n>_size constant for each entry */
-static const u32 SFX_SIZE_TABLE[] = {
-    sfx_0_size, sfx_1_size, sfx_2_size, sfx_3_size, sfx_4_size,
-    sfx_5_size, sfx_6_size, sfx_7_size, sfx_8_size
-};
-
 #define SFX_COUNT 9
+
+/* sfx_N_size are extern variables, not compile-time constants, so we
+ * cannot use them in a static initializer. Look them up inline instead. */
+static u32 sfx_get_size(u8 id)
+{
+    switch (id)
+    {
+        case 0: return sfx_0_size;
+        case 1: return sfx_1_size;
+        case 2: return sfx_2_size;
+        case 3: return sfx_3_size;
+        case 4: return sfx_4_size;
+        case 5: return sfx_5_size;
+        case 6: return sfx_6_size;
+        case 7: return sfx_7_size;
+        case 8: return sfx_8_size;
+        default: return 0;
+    }
+}
 
 void sfx_init(void)
 {
@@ -455,20 +469,25 @@ void sfx_init(void)
 
 void sfx_play(u8 sfx_id)
 {
+    /* SND_startPlay_PCM(sample, len, rate, pan, loop)
+     * rate: output rate in Hz (8000 Hz matches our WAV declaration)
+     * pan:  SOUND_PAN_CENTER (both speakers)
+     * loop: FALSE (one-shot) */
     if (sfx_id >= SFX_COUNT) return;
-    SND_startPlay_PCM(SFX_TABLE[sfx_id], SFX_SIZE_TABLE[sfx_id], SOUND_PCM_CH1, FALSE);
+    SND_startPlay_PCM(SFX_TABLE[sfx_id], sfx_get_size(sfx_id),
+                      8000, SOUND_PAN_CENTER, FALSE);
 }
 
 void sfx_play_sustained(u8 sfx_id)
 {
     if (sfx_id >= SFX_COUNT) return;
-    SND_startPlay_PCM(SFX_TABLE[sfx_id], SFX_SIZE_TABLE[sfx_id], SOUND_PCM_CH2, FALSE);
+    SND_startPlay_PCM(SFX_TABLE[sfx_id], sfx_get_size(sfx_id),
+                      8000, SOUND_PAN_CENTER, FALSE);
 }
 
 void sfx_stop(void)
 {
-    SND_stopPlay_PCM(SOUND_PCM_CH1);
-    SND_stopPlay_PCM(SOUND_PCM_CH2);
+    SND_stopPlay_PCM();
 }
 
 /* ============================================================

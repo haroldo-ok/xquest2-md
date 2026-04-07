@@ -118,6 +118,7 @@ static void move_toward(Enemy *e, fix16 tx, fix16 ty, fix16 speed)
 /* ============================================================
  * UTILITY: Move away from target
  * ============================================================ */
+static void move_away(Enemy *e, fix16 tx, fix16 ty, fix16 speed) __attribute__((unused));
 static void move_away(Enemy *e, fix16 tx, fix16 ty, fix16 speed)
 {
     fix16 dx = fix16Sub(e->x, tx);

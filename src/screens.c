@@ -78,7 +78,7 @@ static u8 g_difficulty = DIFFICULTY_NORMAL;
 
 /* Hall of Fame table in WRAM */
 HofEntry g_hof[HOF_MAX_ENTRIES];
-u8 g_hof_initialised = FALSE;
+u8       g_hof_initialised = FALSE;
 
 /* ────────────────────────────────────────────────
  * HOF helpers

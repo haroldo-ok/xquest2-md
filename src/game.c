@@ -169,11 +169,12 @@ void gems_init(GameData *gd, u8 count)
         } while (tilemap_is_solid(gd, fix16ToInt(g->x)/TILE_W, (fix16ToInt(g->y)-HUD_HEIGHT)/TILE_H));
 
         g->collected = FALSE;
-        g->active    = TRUE;
         g->spr = SPR_addSprite(&spr_gem,
                                fix16ToInt(g->x) - 8,
                                fix16ToInt(g->y) - 8,
                                TILE_ATTR(PAL_COLLECT, TRUE, FALSE, FALSE));
+        if (!g->spr) continue;   /* VRAM alloc failed, skip gem */
+        g->active    = TRUE;
         gd->gems_remaining++;
     }
 }
@@ -184,7 +185,7 @@ void gems_update(GameData *gd)
     {
         Gem *g = &gd->gems[i];
         if (!g->active) continue;
-        SPR_setPosition(g->spr, fix16ToInt(g->x)-8, fix16ToInt(g->y)-8);
+        if (g->spr) SPR_setPosition(g->spr, fix16ToInt(g->x)-8, fix16ToInt(g->y)-8);
     }
 }
 
@@ -207,6 +208,7 @@ void bullet_fire(GameData *gd, fix16 x, fix16 y, fix16 vx, fix16 vy, u8 is_playe
         u8 pal = is_player ? PAL_ACTIVE : PAL_ENEMY;
         b->spr = SPR_addSprite(def, fix16ToInt(x)-4, fix16ToInt(y)-4,
                                TILE_ATTR(pal, TRUE, FALSE, FALSE));
+        if (!b->spr) { b->active = FALSE; return; }
         return;
     }
 }
@@ -261,6 +263,7 @@ void mine_place(GameData *gd, fix16 x, fix16 y)
         m->spr = SPR_addSprite(&spr_mine,
                                fix16ToInt(x)-8, fix16ToInt(y)-8,
                                TILE_ATTR(PAL_ACTIVE, TRUE, FALSE, FALSE));
+        if (!m->spr) { m->active = FALSE; return; }
         return;
     }
 }
@@ -271,7 +274,7 @@ void mines_update(GameData *gd)
     {
         Mine *m = &gd->mines[i];
         if (!m->active) continue;
-        SPR_setPosition(m->spr, fix16ToInt(m->x)-8, fix16ToInt(m->y)-8);
+        if (m->spr) SPR_setPosition(m->spr, fix16ToInt(m->x)-8, fix16ToInt(m->y)-8);
     }
 }
 

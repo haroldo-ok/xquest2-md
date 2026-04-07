@@ -45,6 +45,7 @@ void player_init(Player *p, fix16 x, fix16 y)
                            fix16ToInt(x) - 8,
                            fix16ToInt(y) - 8,
                            TILE_ATTR(PAL_ACTIVE, TRUE, FALSE, FALSE));
+    if (!p->spr) { p->active = FALSE; return; }
     SPR_setAnim(p->spr, 0);
 }
 

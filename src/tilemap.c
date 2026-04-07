@@ -153,8 +153,8 @@ static void write_cell_to_vdp(u8 tx, u8 ty, u16 vram_base)
 
 void tilemap_init(void)
 {
-    /* Set VDP plane B size to 64×32 tiles (smallest that fits 40×28) */
-    VDP_setPlaneSize(64, 32, TRUE);
+    /* SGDK defaults to 64x32 plane size - do NOT call VDP_setPlaneSize here,
+     * as calling it with setupVram=TRUE after SPR_init remaps VRAM regions. */
 
     /* Load the unified background tileset into VRAM at our reserved base */
     VDP_loadTileSet(&bg_tileset, BG_TILESET_VRAM_INDEX, CPU);

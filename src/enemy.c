@@ -147,6 +147,7 @@ void enemy_spawn(Enemy *e, EnemyType type, fix16 x, fix16 y)
                            fix16ToInt(x) - 8,
                            fix16ToInt(y) - 8,
                            TILE_ATTR(PAL_ENEMY, TRUE, FALSE, FALSE));
+    if (!e->spr) { e->active = FALSE; return; }
     SPR_setAnim(e->spr, 0);
 
     /* Apply variant palette/flip for shared-sprite enemy types */
@@ -455,11 +456,11 @@ void enemies_update(GameData *gd)
              * SPR_getAnimationDef does not exist in SGDK 1.70. */
             u16 num_frames = ENEMY_SPR[e->type]->animations[0]->numFrame;
             e->anim_frame = (e->anim_frame + 1) % num_frames;
-            SPR_setFrame(e->spr, e->anim_frame);
+            if (e->spr) SPR_setFrame(e->spr, e->anim_frame);
         }
 
         /* Update sprite position */
-        SPR_setPosition(e->spr,
+        if (e->spr) SPR_setPosition(e->spr,
                         fix16ToInt(e->x) - 8,
                         fix16ToInt(e->y) - 8);
     }

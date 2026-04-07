@@ -201,8 +201,8 @@ static void ai_zinger(Enemy *e, GameData *gd)
     /* Random movement */
     if ((g_frame_count & 0x1F) == 0)
     {
-        e->vx = FIX16_FROM_FLOAT((random() % 200 - 100) * 0.015f);
-        e->vy = FIX16_FROM_FLOAT((random() % 200 - 100) * 0.015f);
+        e->vx = FIX16_FROM_FRAC((random() % 200 - 100) * 15, 1000);
+        e->vy = FIX16_FROM_FRAC((random() % 200 - 100) * 15, 1000);
     }
 }
 
@@ -257,8 +257,8 @@ static void ai_terrier(Enemy *e, GameData *gd)
         /* Idle: random wander */
         if ((g_frame_count & 0x3F) == 0)
         {
-            e->vx = FIX16_FROM_FLOAT((random() % 100 - 50) * 0.02f);
-            e->vy = FIX16_FROM_FLOAT((random() % 100 - 50) * 0.02f);
+            e->vx = FIX16_FROM_FRAC((random() % 100 - 50) * 2, 100);
+            e->vy = FIX16_FROM_FRAC((random() % 100 - 50) * 2, 100);
         }
         /* Detect player */
         if (dx < FIX16(80) && dy < FIX16(80))
@@ -276,7 +276,7 @@ static void ai_doinger(Enemy *e, GameData *gd)
     /* Gets faster and fires more as ai_timer increases */
     e->ai_timer++;
     fix16 speed = fix16Add(ENEMY_SPEED[ENEMY_DOINGER],
-                           FIX16_FROM_FLOAT(e->ai_timer * 0.001f));
+                           FIX16_FROM_FRAC(e->ai_timer, 1000));
     speed = MIN(speed, FIX16(3.0));
     move_toward(e, gd->player.x, gd->player.y, speed);
 
@@ -318,8 +318,8 @@ static void ai_snipe(Enemy *e, GameData *gd)
     /* Slight drift */
     if ((g_frame_count & 0x7F) == 0)
     {
-        e->vx = FIX16_FROM_FLOAT((random() % 60 - 30) * 0.01f);
-        e->vy = FIX16_FROM_FLOAT((random() % 60 - 30) * 0.01f);
+        e->vx = FIX16_FROM_FRAC((random() % 60 - 30), 100);
+        e->vy = FIX16_FROM_FRAC((random() % 60 - 30), 100);
     }
 }
 
@@ -360,8 +360,8 @@ static void ai_cluster(Enemy *e, GameData *gd)
     {
         e->ai_timer = 0;
         /* Gentle random drift */
-        e->vx = FIX16_FROM_FLOAT((random() % 100 - 50) * 0.008f);
-        e->vy = FIX16_FROM_FLOAT((random() % 100 - 50) * 0.008f);
+        e->vx = FIX16_FROM_FRAC((random() % 100 - 50) * 8, 1000);
+        e->vy = FIX16_FROM_FRAC((random() % 100 - 50) * 8, 1000);
     }
 }
 
@@ -501,8 +501,8 @@ void enemy_die(Enemy *e, GameData *gd)
                 {
                     enemy_spawn(&gd->enemies[i], ENEMY_ZIPPO,
                                 e->x, e->y);
-                    gd->enemies[i].vx = FIX16_FROM_FLOAT((random() % 100 - 50) * 0.04f);
-                    gd->enemies[i].vy = FIX16_FROM_FLOAT((random() % 100 - 50) * 0.04f);
+                    gd->enemies[i].vx = FIX16_FROM_FRAC((random() % 100 - 50) * 4, 100);
+                    gd->enemies[i].vy = FIX16_FROM_FRAC((random() % 100 - 50) * 4, 100);
                     break;
                 }
             }

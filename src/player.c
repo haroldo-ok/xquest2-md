@@ -13,12 +13,13 @@
 #define SHIP_HIT_W    10
 #define SHIP_HIT_H    10
 
-/* Direction -> delta velocity table (8-way) */
-static const fix16 DIR_DVX[8] = {
+/* Direction -> delta velocity table (8-way)
+ * Shared with enemy.c via extern in xquest.h */
+const fix16 DIR_DVX[8] = {
      FIX16(1),  FIX16(1),  FIX16(0), FIX16(-1),
     FIX16(-1), FIX16(-1),  FIX16(0),  FIX16(1)
 };
-static const fix16 DIR_DVY[8] = {
+const fix16 DIR_DVY[8] = {
      FIX16(0), FIX16(-1), FIX16(-1), FIX16(-1),
      FIX16(0),  FIX16(1),  FIX16(1),  FIX16(1)
 };
@@ -128,22 +129,19 @@ void player_update(Player *p, GameData *gd)
     }
 
     /* --- SmartBomb (Button B) --- */
+    static u8 bomb_pressed = FALSE;
     if ((joy & BUTTON_B) && p->smartbombs > 0)
     {
-        /* Debounce: wait for release handled via cooldown */
-        static u8 bomb_pressed = FALSE;
         if (!bomb_pressed)
         {
             smartbomb_activate(gd);
             p->smartbombs--;
-            bomb_pressed = TRUE;
             sfx_play(SFX_SMARTBOMB);
         }
         bomb_pressed = TRUE;
     }
     else
     {
-        static u8 bomb_pressed = FALSE;
         bomb_pressed = FALSE;
     }
 
@@ -160,8 +158,6 @@ void player_update(Player *p, GameData *gd)
     }
 
     /* --- Extra life check --- */
-    u32 threshold = SCORE_EXTRA_LIFE_BASE;
-    /* threshold scales with level -- simplified linear */
     static u32 next_life_score = SCORE_EXTRA_LIFE_BASE;
     if (p->score >= next_life_score)
     {

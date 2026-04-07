@@ -106,9 +106,14 @@ extern const u8 sfx_8[];  extern u32 sfx_8_size;
 #define fix16Abs(v)  ((v) < 0 ? -(v) : (v))
 #endif
 
-/* FIX16_FROM_FLOAT - convert a runtime float expression to fix16.
- * SGDK 1.70 uses floatToFix16() for runtime conversion. */
-#define FIX16_FROM_FLOAT(f)  floatToFix16(f)
+/* FIX16_FROM_FLOAT - scale a small integer expression to fix16.
+ * SGDK targets the M68000 which has no FPU. We avoid runtime floats entirely.
+ * Usage: FIX16_FROM_INT_SCALED(numerator, denominator)
+ * e.g.  FIX16_FROM_INT_SCALED(n, 1000) converts n/1000 to fix16.
+ * For the random-velocity pattern used in enemy.c:
+ *   (random() % 200 - 100) * 0.015  =>  (random() % 200 - 100) * 15 / 1000
+ */
+#define FIX16_FROM_FRAC(num, den)   ((fix16)((s32)(num) * 65536L / (den)))
 
 /* ============================================================
  * GLOBAL FRAME COUNTER
@@ -118,8 +123,7 @@ extern u32 g_frame_count;
 
 /* ============================================================
  * 8-DIRECTION VELOCITY TABLES
- * Indexed 0=RIGHT, 1=UP_RIGHT, 2=UP, 3=UP_LEFT,
- *         4=LEFT,  5=DOWN_LEFT, 6=DOWN, 7=DOWN_RIGHT
+ * Defined in player.c, shared with enemy.c via this extern.
  * ============================================================ */
 extern const fix16 DIR_DVX[8];
 extern const fix16 DIR_DVY[8];

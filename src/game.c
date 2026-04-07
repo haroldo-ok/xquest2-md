@@ -470,17 +470,17 @@ void sfx_init(void)
 void sfx_play(u8 sfx_id)
 {
     /* SND_startPlay_PCM(sample, len, rate, pan, loop)
-     * SND_PCM_RATE_8000 matches our WAV declaration (0 8000 in resources.res) */
+     * SOUND_RATE_8000 matches our WAV declaration (0 8000 in resources.res) */
     if (sfx_id >= SFX_COUNT) return;
     SND_startPlay_PCM(SFX_TABLE[sfx_id], sfx_get_size(sfx_id),
-                      SND_PCM_RATE_8000, SOUND_PAN_CENTER, FALSE);
+                      SOUND_RATE_8000, SOUND_PAN_CENTER, FALSE);
 }
 
 void sfx_play_sustained(u8 sfx_id)
 {
     if (sfx_id >= SFX_COUNT) return;
     SND_startPlay_PCM(SFX_TABLE[sfx_id], sfx_get_size(sfx_id),
-                      SND_PCM_RATE_8000, SOUND_PAN_CENTER, FALSE);
+                      SOUND_RATE_8000, SOUND_PAN_CENTER, FALSE);
 }
 
 void sfx_stop(void)

@@ -551,7 +551,7 @@ void title_show(void)
 
     /* Load title image to plane B */
     /* Genesis display is 320x224; title is 320x240 - crop 8px top/bottom */
-    VDP_drawImageEx(BG_B, &img_title, TILE_ATTR_FULL(PAL_BG, FALSE, FALSE, FALSE, 0),
+    VDP_drawImageEx(BG_B, &img_title, TILE_ATTR_FULL(PAL_BG, FALSE, FALSE, FALSE, TILE_USERINDEX),
                     0, 0, FALSE, CPU);
 
     /* Draw title text */

@@ -7,13 +7,13 @@
  * The original game uses 16×16 pixel tiles. Genesis VDP works in 8×8 tile
  * units, so each logical 16×16 tile maps to a 2×2 block of VDP tiles.
  *
- * VRAM layout (plane B, tileset loaded at TILE_USER_INDEX = 1)
+ * VRAM layout (plane B, tileset loaded at TILE_USERINDEX = 16)
  * ─────────────────────────────────────────────────────────────
- * Index 0          : empty / transparent (never written explicitly)
- * Indices   1– 32  : WALL tiles        (8 variants × 4 subtiles)
- * Indices  33– 48  : WALL_EDGE tiles   (4 variants × 4 subtiles)
- * Indices  49–120  : FLOOR tiles       (18 variants × 4 subtiles)
- * Indices 121–136  : FLOOR_CYAN tiles  (4 variants × 4 subtiles)
+ * Index 0–15       : SGDK system tiles (reserved) / transparent (never written explicitly)
+ * Indices  16– 47  : WALL tiles        (8 variants × 4 subtiles)
+ * Indices  48– 63  : WALL_EDGE tiles   (4 variants × 4 subtiles)
+ * Indices  64–135  : FLOOR tiles       (18 variants × 4 subtiles)
+ * Indices 136–151  : FLOOR_CYAN tiles  (4 variants × 4 subtiles)
  *
  * Logical tile types stored in GameData.tilemap[][]
  * ──────────────────────────────────────────────────
@@ -48,11 +48,11 @@
  * Each logical 16×16 tile occupies 4 consecutive
  * VRAM 8×8 indices:  TL, TR, BL, BR
  * ──────────────────────────────────────────────── */
-#define BG_TILESET_VRAM_INDEX   1        /* start of our tiles in VRAM     */
-#define VRAM_WALL_BASE          1        /* wall variants 0-7  → 1..32     */
-#define VRAM_WALL_EDGE_BASE    33        /* edge variants 0-3  → 33..48    */
-#define VRAM_FLOOR_BASE        49        /* floor variants 0-17 → 49..120  */
-#define VRAM_FLOOR_CYAN_BASE  121        /* cyan variants 0-3  → 121..136  */
+#define BG_TILESET_VRAM_INDEX   TILE_USERINDEX        /* start of our tiles in VRAM     */
+#define VRAM_WALL_BASE          (TILE_USERINDEX + 0)        /* wall variants 0-7  → 1..32     */
+#define VRAM_WALL_EDGE_BASE     (TILE_USERINDEX + 32)        /* edge variants 0-3  → 33..48    */
+#define VRAM_FLOOR_BASE         (TILE_USERINDEX + 48)        /* floor variants 0-17 → 49..120  */
+#define VRAM_FLOOR_CYAN_BASE    (TILE_USERINDEX + 120)        /* cyan variants 0-3  → 121..136  */
 
 /* Number of variants per tile type */
 #define WALL_VARIANTS        8

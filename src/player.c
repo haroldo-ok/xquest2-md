@@ -180,11 +180,11 @@ void player_draw(Player *p)
     SPR_setPosition(p->spr,
                     fix16ToInt(p->x) - 8,
                     fix16ToInt(p->y) - 8);
-    /* Flip sprite based on horizontal direction for free */
-    u8 hflip = (p->dir == DIR_LEFT  ||
-                p->dir == DIR_UP_LEFT ||
-                p->dir == DIR_DOWN_LEFT);
-    SPR_setHFlip(p->spr, hflip);
+    /* spr_ship has 8 frames in Direction order (0=RIGHT .. 7=DOWN_RIGHT).
+     * Simply set the frame to the current direction index. */
+    if (p->dir != DIR_NONE)
+        SPR_setFrame(p->spr, (u16)p->dir);
+    SPR_setHFlip(p->spr, FALSE);   /* no flipping needed */
 }
 
 /* ============================================================

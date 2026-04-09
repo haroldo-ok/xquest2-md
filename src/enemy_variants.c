@@ -53,16 +53,14 @@ typedef struct {
 
 static const VariantDef VARIANT_TABLE[] =
 {
-    /* ZINGER: grunger sprite, secondary palette, hflipped */
-    { ENEMY_ZINGER,   PAL_COLLECT, TRUE,  FALSE, 3 },
-    /* SNIPE: terrier sprite, secondary palette, vflipped */
-    { ENEMY_SNIPE,    PAL_COLLECT, FALSE, TRUE,  2 },
-    /* BUCKSHOT: zippo sprite, secondary palette, no flip */
-    { ENEMY_BUCKSHOT, PAL_COLLECT, FALSE, FALSE, 1 },
-    /* CLUSTER: tribbler sprite, secondary palette, both flipped */
-    { ENEMY_CLUSTER,  PAL_COLLECT, TRUE,  TRUE,  5 },
-    /* REPULSOR: meeby sprite, secondary palette, no flip */
-    { ENEMY_REPULSOR, PAL_COLLECT, FALSE, FALSE, 12 },
+    /* All variant enemies now have their own extracted sprites from xquest.gfx,
+     * quantized against pal_enemy. The PAL_COLLECT trick is no longer needed.
+     * Flips and frame offsets are kept for visual variety. */
+    { ENEMY_ZINGER,   PAL_ENEMY, TRUE,  FALSE, 3 },
+    { ENEMY_SNIPE,    PAL_ENEMY, FALSE, TRUE,  2 },
+    { ENEMY_BUCKSHOT, PAL_ENEMY, FALSE, FALSE, 1 },
+    { ENEMY_CLUSTER,  PAL_ENEMY, TRUE,  TRUE,  5 },
+    { ENEMY_REPULSOR, PAL_ENEMY, FALSE, FALSE, 12 },
 };
 #define VARIANT_COUNT  5
 
@@ -80,13 +78,11 @@ static u8 variant_pal_loaded = FALSE;
  * ──────────────────────────────────────────────── */
 void ev_init(void)
 {
-    /* Load the variant enemy palette into PAL2.
-     * Gems also use PAL2 — they share the same palette here.
-     * The gem colors in pal_enemy2 will be wrong (tinted), which means
-     * gems will look slightly different when variant enemies are on screen.
-     * Accept this trade-off until a unified 16-color palette is crafted. */
-    PAL_setPalette(PAL_COLLECT, pal_enemy2.data, CPU);
-    variant_pal_loaded = TRUE;
+    /* Each enemy type now has its own extracted sprite (spr_zinger, spr_snipe,
+     * spr_buckshot, spr_cluster, spr_repulsor) quantized against pal_enemy.
+     * The pal_enemy2 override is no longer needed — leave PAL_COLLECT intact
+     * so gems render with the correct blue/cyan colors throughout the level. */
+    variant_pal_loaded = FALSE;
 }
 
 /* ────────────────────────────────────────────────

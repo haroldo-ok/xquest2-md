@@ -144,7 +144,8 @@ extern const u8 sfx_8[];  extern u32 sfx_8_size;
 #define PORTAL_LEFT_X        10
 #define PORTAL_RIGHT_X      (SCREEN_W - 10)
 /* Vertical Y position of portals (screen vertical midpoint) */
-#define PORTAL_Y            ((HUD_HEIGHT + SCREEN_H) / 2)
+/* Portal screen Y: fixed at viewport vertical midpoint (screen pixels, not world) */
+#define PORTAL_SCREEN_Y     (HUD_HEIGHT + PLAYFIELD_H / 2)  /* 16+104 = 120 px from top */
 
 /* ============================================================
  * LEVEL DEFINITIONS  (mirrored from original xqvars.pas)

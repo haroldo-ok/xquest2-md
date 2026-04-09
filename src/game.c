@@ -494,54 +494,6 @@ void level_generate(GameData *gd, u16 level_num)
         }
     }
 
-    /* Spawn initial enemies at level start (remainder trickle in via portals) */
-    {
-        s16 enm_adj = diff ? diff->enemy_count_add : 0;
-        u8 max_on   = (u8)MIN((s16)ld->max_enemies + enm_adj, (s16)MAX_ENEMIES);
-        /* Spawn half of max_enemies immediately; the rest enter through portals */
-        u8 start_count = MAX(1, max_on / 2);
-        u8 spawned = 0;
-        for (u8 i = 0; i < MAX_ENEMIES && spawned < start_count; i++)
-        {
-            if (gd->enemies[i].active) continue;
-
-            /* Weighted random type from this level's prob table */
-            EnemyType type = ENEMY_GRUNGER;
-            {
-                /* Sum weights */
-                u16 total = 0;
-                for (u8 t = 0; t < LEVEL_PROB_COUNT; t++)
-                    total += g_level_probs[li][t];
-                if (total > 0)
-                {
-                    u16 roll = (u16)(random() % total);
-                    u16 acc  = 0;
-                    for (u8 t = 0; t < LEVEL_PROB_COUNT; t++)
-                    {
-                        acc += g_level_probs[li][t];
-                        if (roll < acc) { type = (EnemyType)t; break; }
-                    }
-                }
-            }
-
-            fix16 ex, ey;
-            u8 attempts = 0;
-            do {
-                ex = FIX16(16 + (s16)(random() % (SCREEN_W - 32)));
-                ey = FIX16(HUD_HEIGHT + 16 + (s16)(random() % (SCREEN_H - HUD_HEIGHT - 32)));
-                attempts++;
-            } while (attempts < 30 && (
-                tilemap_is_solid(gd,
-                    (u8)(fix16ToInt(ex) / TILE_W),
-                    (u8)((fix16ToInt(ey) - HUD_HEIGHT) / TILE_H)) ||
-                (fix16Abs(fix16Sub(ex, gd->player.x)) < FIX16(80) &&
-                 fix16Abs(fix16Sub(ey, gd->player.y)) < FIX16(80))));
-
-            enemy_spawn(&gd->enemies[i], type, ex, ey);
-            spawned++;
-        }
-    }
-
     /* Initialise variant enemy palette */
     ev_init();
 
@@ -786,31 +738,30 @@ void level_check_complete(GameData *gd)
         u8  max_on   = (u8)MIN((s16)ld->max_enemies + enm_adj, (s16)MAX_ENEMIES);
         u8  on_screen = count_active_enemies(gd);
 
-        /* Try to trigger a new portal if below max and neither is busy.
-         * Roll against erelease_prob per frame, scaled by difficulty. */
-        if (on_screen < max_on)
+        /* Try to trigger each portal independently.
+         * Each gets its own random roll against erelease_prob per frame. */
+        u32 roll_limit = (u32)ld->erelease_prob;
+        if (diff && diff->enemy_count_add > 0)
+            roll_limit = roll_limit * 12 / 10;   /* +20% on harder */
+
+        /* Left portal */
+        if (on_screen < max_on && gd->portal_left_cd < 0)
         {
-            u32 roll_limit = (u32)ld->erelease_prob;
-            if (diff && diff->enemy_count_add > 0)
-                roll_limit = roll_limit * 12 / 10;   /* +20% on harder */
-
-            /* Random 0..65535 check */
-            u32 roll = (u32)(random() & 0xFFFF);
-            if (roll < roll_limit)
+            if ((u32)(random() & 0xFFFF) < roll_limit)
             {
-                EnemyType etype = portal_pick_type(gd->level);
+                gd->portal_left_cd   = PORTAL_ANIM_FRAMES;
+                gd->portal_left_type = (u8)portal_pick_type(gd->level);
+                on_screen++;   /* count the incoming enemy against the cap */
+            }
+        }
 
-                /* Pick left or right portal, preferring idle one */
-                if (gd->portal_left_cd < 0 && (gd->portal_right_cd >= 0 || (random() & 1)))
-                {
-                    gd->portal_left_cd   = PORTAL_ANIM_FRAMES;
-                    gd->portal_left_type = (u8)etype;
-                }
-                else if (gd->portal_right_cd < 0)
-                {
-                    gd->portal_right_cd   = PORTAL_ANIM_FRAMES;
-                    gd->portal_right_type = (u8)etype;
-                }
+        /* Right portal */
+        if (on_screen < max_on && gd->portal_right_cd < 0)
+        {
+            if ((u32)(random() & 0xFFFF) < roll_limit)
+            {
+                gd->portal_right_cd   = PORTAL_ANIM_FRAMES;
+                gd->portal_right_type = (u8)portal_pick_type(gd->level);
             }
         }
 

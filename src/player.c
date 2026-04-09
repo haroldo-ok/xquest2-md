@@ -160,15 +160,20 @@ void player_update(Player *p, GameData *gd)
         p->vy = fix16Add(p->vy, fix16Mul(DIR_DVY[dir], SHIP_ACCEL));
     }
 
-    /* Clamp speed */
-    fix16 speed = fix16Mul(p->vx, p->vx);
-    speed = fix16Add(speed, fix16Mul(p->vy, p->vy));
-    if (speed > fix16Mul(SHIP_MAX_SPEED, SHIP_MAX_SPEED))
+    /* Clamp speed using Manhattan-length approximation.
+     * |v| ≈ max(|vx|,|vy|) + 0.5*min(|vx|,|vy|)  (max error ~6%)
+     * Avoids fix16Sqrt which is not available in SGDK 1.70. */
     {
-        /* Normalize: approximate sqrt then scale */
-        fix16 inv = fix16Div(SHIP_MAX_SPEED, fix16Sqrt(speed));
-        p->vx = fix16Mul(p->vx, inv);
-        p->vy = fix16Mul(p->vy, inv);
+        fix16 ax = fix16Abs(p->vx), ay = fix16Abs(p->vy);
+        fix16 hi = (ax > ay) ? ax : ay;
+        fix16 lo = (ax > ay) ? ay : ax;
+        fix16 approx_len = fix16Add(hi, fix16Mul(lo, FIX16(0.5)));
+        if (approx_len > SHIP_MAX_SPEED && approx_len > FIX16(0.01))
+        {
+            fix16 scale = fix16Div(SHIP_MAX_SPEED, approx_len);
+            p->vx = fix16Mul(p->vx, scale);
+            p->vy = fix16Mul(p->vy, scale);
+        }
     }
 
     /* Friction */

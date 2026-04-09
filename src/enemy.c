@@ -276,13 +276,14 @@ static void ai_meeby(Enemy *e, GameData *gd)
     /* Rotate velocity by the curve matrix every frame */
     if (e->curvesin != 0)
     {
-        /* new_vx = vx*cos - vy*sin  (all ×32767) */
-        s32 nvx = ((s32)fix16ToRaw(e->vx) * e->curvecos -
-                   (s32)fix16ToRaw(e->vy) * e->curvesin) >> 15;
-        s32 nvy = ((s32)fix16ToRaw(e->vy) * e->curvecos +
-                   (s32)fix16ToRaw(e->vx) * e->curvesin) >> 15;
-        e->vx = fix16FromRaw((s32)nvx);
-        e->vy = fix16FromRaw((s32)nvy);
+        /* new_vx = vx*cos - vy*sin  (curvecos/curvesin are Q15, i.e. ×32767)
+         * fix16 is typedef s32 in SGDK — the value is already the raw bits. */
+        s32 vx32 = (s32)e->vx;
+        s32 vy32 = (s32)e->vy;
+        s32 nvx = (vx32 * (s32)e->curvecos - vy32 * (s32)e->curvesin) >> 15;
+        s32 nvy = (vy32 * (s32)e->curvecos + vx32 * (s32)e->curvesin) >> 15;
+        e->vx = (fix16)nvx;
+        e->vy = (fix16)nvy;
     }
 
     /* Periodically re-aim and randomise curve */
@@ -518,12 +519,12 @@ void enemies_update(GameData *gd)
          * curve bends it each frame (matching original curvesin/curvecos logic). */
         if (e->curvesin != 0)
         {
-            s32 nvx = ((s32)fix16ToRaw(e->vx) * (s32)e->curvecos -
-                       (s32)fix16ToRaw(e->vy) * (s32)e->curvesin) >> 15;
-            s32 nvy = ((s32)fix16ToRaw(e->vy) * (s32)e->curvecos +
-                       (s32)fix16ToRaw(e->vx) * (s32)e->curvesin) >> 15;
-            e->vx = fix16FromRaw(nvx);
-            e->vy = fix16FromRaw(nvy);
+            s32 vx32 = (s32)e->vx;
+            s32 vy32 = (s32)e->vy;
+            s32 nvx = (vx32 * (s32)e->curvecos - vy32 * (s32)e->curvesin) >> 15;
+            s32 nvy = (vy32 * (s32)e->curvecos + vx32 * (s32)e->curvesin) >> 15;
+            e->vx = (fix16)nvx;
+            e->vy = (fix16)nvy;
         }
 
         /* Integrate position */

@@ -249,7 +249,7 @@ void collision_check_all(GameData *gd)
                         fix16 spd = FIX16(3.5);
                         bullet_fire(gd, e->x, e->y,
                                     fix16Div(fix16Mul(dx, spd), dist),
-                                    fix16Div(fix16Mul(dy, spd), dist), FALSE);
+                                    fix16Div(fix16Mul(dy, spd), dist), BULLET_PURPLE);
                     }
                 }
                 break;   /* one bullet hits one enemy per iteration */
@@ -315,20 +315,36 @@ void gems_draw(GameData *gd) { (void)gd; }
 /* ============================================================
  * bullet.c
  * ============================================================ */
-void bullet_fire(GameData *gd, fix16 x, fix16 y, fix16 vx, fix16 vy, u8 is_player)
+void bullet_fire(GameData *gd, fix16 x, fix16 y, fix16 vx, fix16 vy, BulletType type)
 {
+    /* Sprite + palette per bullet type */
+    static const SpriteDefinition *BULLET_SPR[] = {
+        &spr_bullet_player,   /* BULLET_PLAYER   */
+        &spr_bullet_green,    /* BULLET_GREEN    */
+        &spr_bullet_yellow,   /* BULLET_YELLOW   */
+        &spr_bullet_purple,   /* BULLET_PURPLE   */
+        &spr_bullet_buckshot, /* BULLET_BUCKSHOT */
+    };
+    static const u8 BULLET_PAL[] = {
+        PAL_ACTIVE, /* BULLET_PLAYER   */
+        PAL_ENEMY,  /* BULLET_GREEN    */
+        PAL_ENEMY,  /* BULLET_YELLOW   */
+        PAL_ENEMY,  /* BULLET_PURPLE   */
+        PAL_ENEMY,  /* BULLET_BUCKSHOT */
+    };
+
     for (u8 i = 0; i < MAX_BULLETS; i++)
     {
         Bullet *b = &gd->bullets[i];
         if (b->active) continue;
         b->x = x;  b->y = y;
         b->vx = vx; b->vy = vy;
-        b->is_player = is_player;
+        b->is_player  = (type == BULLET_PLAYER);
+        b->bullet_type = type;
         b->active = TRUE;
-        const SpriteDefinition *def = is_player ? &spr_bullet_player : &spr_bullet_green;
-        u8 pal = is_player ? PAL_ACTIVE : PAL_ENEMY;
-        b->spr = SPR_addSprite(def, fix16ToInt(x)-4, fix16ToInt(y)-4,
-                               TILE_ATTR(pal, TRUE, FALSE, FALSE));
+        b->spr = SPR_addSprite(BULLET_SPR[type],
+                               fix16ToInt(x) - 2, fix16ToInt(y) - 2,
+                               TILE_ATTR(BULLET_PAL[type], TRUE, FALSE, FALSE));
         if (!b->spr) { b->active = FALSE; return; }
         return;
     }
@@ -521,30 +537,27 @@ void level_generate(GameData *gd, u16 level_num)
         if (gd->portal_right_spr) { SPR_releaseSprite(gd->portal_right_spr); gd->portal_right_spr = NULL; }
     }
 
-    /* Left portal: anchored at x=0, vertically centred on screen midpoint.
-     * The sprite is 16 wide × 24 tall; its left edge lines up with x=0.
-     * Portals are world-fixed at Y = HUD_HEIGHT + WORLD_H/2, adjusted by cam_y. */
-    /* Portal sprites: world-fixed Y = HUD_HEIGHT + WORLD_H/2, adjusted by cam_y */
+    /* Left portal: unique left-facing sprite from xquest.gfx (portal_left, 20x20, 6fr).
+     * World-fixed at the left wall, vertically centred. */
     gd->portal_left_spr = SPR_addSprite(&spr_portal,
                                         0 - gd->cam_x,
-                                        (HUD_HEIGHT + WORLD_H / 2) - gd->cam_y - 12,
-                                        TILE_ATTR(PAL_ACTIVE, TRUE, FALSE, FALSE));
+                                        (HUD_HEIGHT + WORLD_H / 2) - gd->cam_y - 10,
+                                        TILE_ATTR(PAL_COLLECT, TRUE, FALSE, FALSE));
     if (gd->portal_left_spr)
     {
-        SPR_setFrame(gd->portal_left_spr, 0);     /* frame 0 = closed */
+        SPR_setFrame(gd->portal_left_spr, 0);
         SPR_setVisibility(gd->portal_left_spr, VISIBLE);
     }
 
-    /* Right portal: mirror of left, placed at right edge.
-     * Flip horizontally so the opening faces inward. */
-    gd->portal_right_spr = SPR_addSprite(&spr_portal,
-                                         WORLD_W - 16 - gd->cam_x,
-                                         (HUD_HEIGHT + WORLD_H / 2) - gd->cam_y - 12,
-                                         TILE_ATTR(PAL_ACTIVE, TRUE, FALSE, FALSE));
+    /* Right portal: its own unique right-facing sprite (portal_right, 20x20, 6fr).
+     * No horizontal flip needed — the sprite already faces the correct direction. */
+    gd->portal_right_spr = SPR_addSprite(&spr_portal_right,
+                                         WORLD_W - 20 - gd->cam_x,
+                                         (HUD_HEIGHT + WORLD_H / 2) - gd->cam_y - 10,
+                                         TILE_ATTR(PAL_COLLECT, TRUE, FALSE, FALSE));
     if (gd->portal_right_spr)
     {
         SPR_setFrame(gd->portal_right_spr, 0);
-        SPR_setHFlip(gd->portal_right_spr, TRUE);  /* mirror to face inward */
         SPR_setVisibility(gd->portal_right_spr, VISIBLE);
     }
 

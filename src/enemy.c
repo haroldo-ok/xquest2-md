@@ -85,23 +85,24 @@ static const u16 ENEMY_SCORE[ENEMY_TYPE_COUNT] = {
     400,  /* REPULSOR */
 };
 
-/* Sprite definition pointer table */
+/* Sprite definition pointer table — every enemy type uses its own sprite
+ * extracted directly from xquest.gfx with the correct palette. */
 static const SpriteDefinition *ENEMY_SPR[ENEMY_TYPE_COUNT] = {
-    &spr_grunger,    /* GRUNGER */
-    &spr_zippo,      /* ZIPPO */
-    &spr_grunger,    /* ZINGER (shares grunger sprite; differentiate by color in future) */
-    &spr_vince,      /* VINCE */
-    &spr_miner,      /* MINER */
-    &spr_meeby,      /* MEEBY */
-    &spr_retaliator, /* RETALIATOR */
-    &spr_terrier,    /* TERRIER */
-    &spr_doinger,    /* DOINGER */
-    &spr_terrier,    /* SNIPE (shares terrier) */
-    &spr_tribbler,   /* TRIBBLER */
-    &spr_zippo,      /* BUCKSHOT (shares zippo) */
-    &spr_tribbler,   /* CLUSTER (shares tribbler) */
-    &spr_sticktight, /* STICKTIGHT */
-    &spr_meeby,      /* REPULSOR (large, forceful) */
+    &spr_grunger,     /* 0  GRUNGER    11x11 4fr */
+    &spr_zippo,       /* 1  ZIPPO      11x11 4fr */
+    &spr_zinger,      /* 2  ZINGER     16x16 4fr */
+    &spr_vince,       /* 3  VINCE      16x16 4fr */
+    &spr_miner,       /* 4  MINER      12x12 4fr */
+    &spr_meeby,       /* 5  MEEBY      20x20 6fr */
+    &spr_retaliator,  /* 6  RETALIATOR 11x13 4fr */
+    &spr_terrier,     /* 7  TERRIER    21x8  4fr */
+    &spr_doinger,     /* 8  DOINGER    12x12 4fr */
+    &spr_snipe,       /* 9  SNIPE      9x9   4fr */
+    &spr_tribbler,    /* 10 TRIBBLER   14x14 4fr */
+    &spr_buckshot,    /* 11 BUCKSHOT   11x11 4fr */
+    &spr_cluster,     /* 12 CLUSTER    9x9   4fr */
+    &spr_sticktight,  /* 13 STICKTIGHT 11x11 4fr */
+    &spr_repulsor,    /* 14 REPULSOR   12x12 6fr */
 };
 
 /* Return speed adjusted for difficulty and game speed ramp */
@@ -179,9 +180,18 @@ void enemy_spawn(Enemy *e, EnemyType type, fix16 x, fix16 y)
         e->curvecos = 32767;   /* identity */
     }
 
+    /* Sprite centre offsets (half the sprite's pixel dimensions).
+     * Used so SPR_setPosition places the sprite centred on e->x,e->y. */
+    static const s8 SPR_OFS_X[ENEMY_TYPE_COUNT] = {
+         6,  6,  8,  8,  6, 10,  6, 11,  6,  5,  7,  6,  5,  6,  6
+    };  /* GR ZP ZI VI MI ME RE TE DO SN TR BK CL ST RP  (half of actual px width) */
+    static const s8 SPR_OFS_Y[ENEMY_TYPE_COUNT] = {
+         6,  6,  8,  8,  6, 10,  7,  4,  6,  5,  7,  6,  5,  6,  6
+    };  /* same order */
+
     e->spr = SPR_addSprite(ENEMY_SPR[type],
-                           fix16ToInt(x) - 8,
-                           fix16ToInt(y) - 8,
+                           fix16ToInt(x) - SPR_OFS_X[type],
+                           fix16ToInt(y) - SPR_OFS_Y[type],
                            TILE_ATTR(PAL_ENEMY, TRUE, FALSE, FALSE));
     if (!e->spr) { e->active = FALSE; return; }
     SPR_setAnim(e->spr, 0);
@@ -232,10 +242,10 @@ static void ai_zinger(Enemy *e, GameData *gd)
         e->ai_timer = 0;
         /* Fire in 4 directions */
         fix16 spd = FIX16(2.5);
-        bullet_fire(gd, e->x, e->y,  spd,      FIX16(0), FALSE);
-        bullet_fire(gd, e->x, e->y, FIX16(0),  spd,      FALSE);
-        bullet_fire(gd, e->x, e->y, -spd,      FIX16(0), FALSE);
-        bullet_fire(gd, e->x, e->y, FIX16(0), -spd,      FALSE);
+        bullet_fire(gd, e->x, e->y,  spd,      FIX16(0), BULLET_GREEN);
+        bullet_fire(gd, e->x, e->y, FIX16(0),  spd,      BULLET_GREEN);
+        bullet_fire(gd, e->x, e->y, -spd,      FIX16(0), BULLET_GREEN);
+        bullet_fire(gd, e->x, e->y, FIX16(0), -spd,      BULLET_GREEN);
         sfx_play(SFX_ENEMY_SHOOT);
     }
     /* Random movement */
@@ -370,7 +380,7 @@ static void ai_doinger(Enemy *e, GameData *gd)
         if (dist > FIX16(1))
             bullet_fire(gd, e->x, e->y,
                         fix16Div(fix16Mul(dx, spd), dist),
-                        fix16Div(fix16Mul(dy, spd), dist), FALSE);
+                        fix16Div(fix16Mul(dy, spd), dist), BULLET_GREEN);
     }
 }
 
@@ -390,7 +400,7 @@ static void ai_snipe(Enemy *e, GameData *gd)
             fix16 spd = FIX16(4.0);
             bullet_fire(gd, e->x, e->y,
                         fix16Div(fix16Mul(dx, spd), dist),
-                        fix16Div(fix16Mul(dy, spd), dist), FALSE);
+                        fix16Div(fix16Mul(dy, spd), dist), BULLET_YELLOW);
             sfx_play(SFX_ENEMY_SHOOT);
         }
     }
@@ -423,7 +433,7 @@ static void ai_buckshot(Enemy *e, GameData *gd)
             fix16 spd = FIX16(2.0);
             bullet_fire(gd, e->x, e->y,
                         fix16Mul(DIR_DVX[d], spd),
-                        fix16Mul(DIR_DVY[d], spd), FALSE);
+                        fix16Mul(DIR_DVY[d], spd), BULLET_BUCKSHOT);
         }
         sfx_play(SFX_ENEMY_SHOOT);
     }
@@ -609,10 +619,16 @@ void enemies_update(GameData *gd)
             if (e->spr) SPR_setFrame(e->spr, e->anim_frame);
         }
 
-        /* Update sprite position */
+        /* Update sprite position (centred on e->x, e->y) */
+        static const s8 UPD_OFS_X[ENEMY_TYPE_COUNT] = {
+             6,  6,  8,  8,  6, 10,  6, 11,  6,  5,  7,  6,  5,  6,  6
+        };
+        static const s8 UPD_OFS_Y[ENEMY_TYPE_COUNT] = {
+             6,  6,  8,  8,  6, 10,  7,  4,  6,  5,  7,  6,  5,  6,  6
+        };
         if (e->spr) SPR_setPosition(e->spr,
-                        fix16ToInt(e->x) - 8 - gd->cam_x,
-                        fix16ToInt(e->y) - 8 - gd->cam_y);
+                        fix16ToInt(e->x) - UPD_OFS_X[e->type] - gd->cam_x,
+                        fix16ToInt(e->y) - UPD_OFS_Y[e->type] - gd->cam_y);
     }
 }
 
@@ -668,10 +684,10 @@ void enemy_die(Enemy *e, GameData *gd)
     {
         /* Fires in all 4 directions on death */
         fix16 spd = FIX16(3.0);
-        bullet_fire(gd, e->x, e->y,  spd,      FIX16(0), FALSE);
-        bullet_fire(gd, e->x, e->y, FIX16(0),  spd,      FALSE);
-        bullet_fire(gd, e->x, e->y, -spd,      FIX16(0), FALSE);
-        bullet_fire(gd, e->x, e->y, FIX16(0), -spd,      FALSE);
+        bullet_fire(gd, e->x, e->y,  spd,      FIX16(0), BULLET_PURPLE);
+        bullet_fire(gd, e->x, e->y, FIX16(0),  spd,      BULLET_PURPLE);
+        bullet_fire(gd, e->x, e->y, -spd,      FIX16(0), BULLET_PURPLE);
+        bullet_fire(gd, e->x, e->y, FIX16(0), -spd,      BULLET_PURPLE);
         sfx_play(SFX_ENEMY_SHOOT);
     }
 

@@ -113,9 +113,9 @@ void player2_init(fix16 x, fix16 y)
     p2_state.invincible    = 0;
     p2_state.active        = TRUE;
 
-    /* Player 2 uses the thrust sprite hflipped to distinguish visually */
+    /* Player 2 uses the same ship sprite as P1, hflipped to distinguish visually */
     p2_state.spr = SPR_addSprite(
-        &spr_ship_thrust,
+        &spr_ship,
         fix16ToInt(x) - 8,
         fix16ToInt(y) - 8,
         TILE_ATTR(PAL_ACTIVE, TRUE, FALSE, FALSE));
@@ -196,7 +196,7 @@ void player2_update(GameData *gd)
     {
         fix16 bvx = fix16Mul(P2_DVX[p->dir], BULLET_SPEED);
         fix16 bvy = fix16Mul(P2_DVY[p->dir], BULLET_SPEED);
-        bullet_fire(gd, p->x, p->y, bvx, bvy, TRUE);
+        bullet_fire(gd, p->x, p->y, bvx, bvy, BULLET_PLAYER);
         p->shoot_cooldown = SHIP_FIRE_COOLDOWN;
         sfx_play(SFX_SHOOT);
     }

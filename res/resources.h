@@ -17,28 +17,54 @@ extern const Palette pal_enemy;
 extern const Palette pal_enemy2;
 extern const TileSet bg_tileset;
 extern const TileSet xquest_font;
+
+/* Player & Objects */
 extern const SpriteDefinition spr_ship;
-extern const SpriteDefinition spr_ship_thrust;
-extern const SpriteDefinition spr_ship_diag;
-extern const SpriteDefinition spr_gem;
 extern const SpriteDefinition spr_mine;
-extern const SpriteDefinition spr_gate;
-extern const SpriteDefinition spr_powercharge;
-extern const SpriteDefinition spr_smartbomb;
-extern const SpriteDefinition spr_explosion;
+extern const SpriteDefinition spr_enemy_mine;
 extern const SpriteDefinition spr_bullet_player;
+extern const SpriteDefinition spr_smartbomb;
+
+/* Gems / Gate / Portals / Powerups */
+extern const SpriteDefinition spr_gem;
+extern const SpriteDefinition spr_supercrystal;
+extern const SpriteDefinition spr_gate;
+extern const SpriteDefinition spr_gate_right;
+extern const SpriteDefinition spr_portal;
+extern const SpriteDefinition spr_portal_right;
+extern const SpriteDefinition spr_powercharge;
+extern const SpriteDefinition spr_corner_tl;
+extern const SpriteDefinition spr_corner_tr;
+extern const SpriteDefinition spr_corner_bl;
+extern const SpriteDefinition spr_corner_br;
+
+/* FX */
+extern const SpriteDefinition spr_explosion;
+
+/* Enemy bullets */
 extern const SpriteDefinition spr_bullet_green;
 extern const SpriteDefinition spr_bullet_yellow;
-extern const SpriteDefinition spr_meeby;
+extern const SpriteDefinition spr_bullet_purple;
+extern const SpriteDefinition spr_bullet_buckshot;
+
+/* Enemies */
 extern const SpriteDefinition spr_grunger;
 extern const SpriteDefinition spr_zippo;
-extern const SpriteDefinition spr_tribbler;
-extern const SpriteDefinition spr_retaliator;
-extern const SpriteDefinition spr_terrier;
-extern const SpriteDefinition spr_sticktight;
-extern const SpriteDefinition spr_doinger;
+extern const SpriteDefinition spr_zinger;
 extern const SpriteDefinition spr_vince;
 extern const SpriteDefinition spr_miner;
+extern const SpriteDefinition spr_meeby;
+extern const SpriteDefinition spr_retaliator;
+extern const SpriteDefinition spr_terrier;
+extern const SpriteDefinition spr_doinger;
+extern const SpriteDefinition spr_snipe;
+extern const SpriteDefinition spr_tribbler;
+extern const SpriteDefinition spr_tribble_frag;
+extern const SpriteDefinition spr_buckshot;
+extern const SpriteDefinition spr_cluster;
+extern const SpriteDefinition spr_sticktight;
+extern const SpriteDefinition spr_repulsor;
+
 extern const Image img_title;
 
 #endif // _RES_RESOURCES_H_

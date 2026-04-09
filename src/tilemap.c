@@ -196,9 +196,9 @@ void tilemap_cell_at_pixel(s16 px, s16 py, u8 *out_tx, u8 *out_ty)
 {
     /* Clamp to playfield */
     if (px < 0)            px = 0;
-    if (px >= SCREEN_W)    px = SCREEN_W - 1;
+    if (px >= WORLD_W)     px = WORLD_W - 1;
     if (py < HUD_HEIGHT)   py = HUD_HEIGHT;
-    if (py >= SCREEN_H)    py = SCREEN_H - 1;
+    if (py >= WORLD_H)     py = WORLD_H - 1;
 
     *out_tx = (u8)((u16)px / TILE_W);
     *out_ty = (u8)(((u16)py - HUD_HEIGHT) / TILE_H);

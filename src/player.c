@@ -6,8 +6,78 @@
 
 #include <genesis.h>
 #include "xquest.h"
+#include "tilemap.h"
 #include "sfx.h"
 #include "resources.h"
+
+/* ============================================================
+ * WALL COLLISION HELPERS
+ *
+ * We test the four corners of the ship's 10x10 hitbox
+ * (centred on p->x, p->y) against the tile map.
+ * On contact: bounce velocity component and push out of wall.
+ * On Easy difficulty (DiffLevel 0): rebound instead of die.
+ * All other difficulties: die on wall contact.
+ * ============================================================ */
+#define HALF_HIT  5   /* half of SHIP_HIT_W / SHIP_HIT_H */
+
+/* Return TRUE if pixel (px,py) is inside a solid tile */
+static u8 pixel_solid(const GameData *gd, s16 px, s16 py)
+{
+    if (px < 0 || px >= WORLD_W  || py < HUD_HEIGHT || py >= WORLD_H)
+        return TRUE;   /* treat off-screen as solid */
+    u8 tx, ty;
+    tilemap_cell_at_pixel(px, py, &tx, &ty);
+    return tilemap_is_solid(gd, tx, ty);
+}
+
+static void player_wall_collide(Player *p, GameData *gd)
+{
+    s16 px = fix16ToInt(p->x);
+    s16 py = fix16ToInt(p->y);
+
+    /* Test left / right edges */
+    u8 hit_l = pixel_solid(gd, px - HALF_HIT, py) ||
+               pixel_solid(gd, px - HALF_HIT, py - HALF_HIT) ||
+               pixel_solid(gd, px - HALF_HIT, py + HALF_HIT);
+    u8 hit_r = pixel_solid(gd, px + HALF_HIT, py) ||
+               pixel_solid(gd, px + HALF_HIT, py - HALF_HIT) ||
+               pixel_solid(gd, px + HALF_HIT, py + HALF_HIT);
+
+    /* Test top / bottom edges */
+    u8 hit_t = pixel_solid(gd, px, py - HALF_HIT) ||
+               pixel_solid(gd, px - HALF_HIT, py - HALF_HIT) ||
+               pixel_solid(gd, px + HALF_HIT, py - HALF_HIT);
+    u8 hit_b = pixel_solid(gd, px, py + HALF_HIT) ||
+               pixel_solid(gd, px - HALF_HIT, py + HALF_HIT) ||
+               pixel_solid(gd, px + HALF_HIT, py + HALF_HIT);
+
+    if (!hit_l && !hit_r && !hit_t && !hit_b) return;
+
+    /* Easy difficulty: rebound (same as original Wimp/Timid with Shield) */
+    u8 diff = gd->difficulty;
+    if (diff == 0)
+    {
+        if (hit_l || hit_r)
+        {
+            p->vx = hit_l ? fix16Abs(p->vx) : -fix16Abs(p->vx);
+            /* Push out */
+            if (hit_l) p->x = fix16Add(p->x, FIX16(2));
+            else       p->x = fix16Sub(p->x, FIX16(2));
+        }
+        if (hit_t || hit_b)
+        {
+            p->vy = hit_t ? fix16Abs(p->vy) : -fix16Abs(p->vy);
+            if (hit_t) p->y = fix16Add(p->y, FIX16(2));
+            else       p->y = fix16Sub(p->y, FIX16(2));
+        }
+    }
+    else
+    {
+        /* Normal+ difficulty: die on wall contact */
+        player_die(p, gd);
+    }
+}
 
 /* Ship hitbox (centred on sprite) */
 #define SHIP_HIT_W    10
@@ -90,15 +160,20 @@ void player_update(Player *p, GameData *gd)
         p->vy = fix16Add(p->vy, fix16Mul(DIR_DVY[dir], SHIP_ACCEL));
     }
 
-    /* Clamp speed */
-    fix16 speed = fix16Mul(p->vx, p->vx);
-    speed = fix16Add(speed, fix16Mul(p->vy, p->vy));
-    if (speed > fix16Mul(SHIP_MAX_SPEED, SHIP_MAX_SPEED))
+    /* Clamp speed using Manhattan-length approximation.
+     * |v| ≈ max(|vx|,|vy|) + 0.5*min(|vx|,|vy|)  (max error ~6%)
+     * Avoids fix16Sqrt which is not available in SGDK 1.70. */
     {
-        /* Normalize: approximate sqrt then scale */
-        fix16 inv = fix16Div(SHIP_MAX_SPEED, fix16Sqrt(speed));
-        p->vx = fix16Mul(p->vx, inv);
-        p->vy = fix16Mul(p->vy, inv);
+        fix16 ax = fix16Abs(p->vx), ay = fix16Abs(p->vy);
+        fix16 hi = (ax > ay) ? ax : ay;
+        fix16 lo = (ax > ay) ? ay : ax;
+        fix16 approx_len = fix16Add(hi, fix16Mul(lo, FIX16(0.5)));
+        if (approx_len > SHIP_MAX_SPEED && approx_len > FIX16(0.01))
+        {
+            fix16 scale = fix16Div(SHIP_MAX_SPEED, approx_len);
+            p->vx = fix16Mul(p->vx, scale);
+            p->vy = fix16Mul(p->vy, scale);
+        }
     }
 
     /* Friction */
@@ -109,11 +184,15 @@ void player_update(Player *p, GameData *gd)
     p->x = fix16Add(p->x, p->vx);
     p->y = fix16Add(p->y, p->vy);
 
-    /* Screen wrap (original XQuest wraps at edges) */
-    if (fix16ToInt(p->x) < 0)          p->x = FIX16(SCREEN_W - 1);
-    if (fix16ToInt(p->x) >= SCREEN_W)  p->x = FIX16(0);
-    if (fix16ToInt(p->y) < HUD_HEIGHT) p->y = FIX16(SCREEN_H - 1);
-    if (fix16ToInt(p->y) >= SCREEN_H)  p->y = FIX16(HUD_HEIGHT);
+    /* World wrap — wrap at world edges (WORLD_W x WORLD_H), not screen edges */
+    if (fix16ToInt(p->x) < 0)          p->x = FIX16(WORLD_W - 1);
+    if (fix16ToInt(p->x) >= WORLD_W)   p->x = FIX16(0);
+    if (fix16ToInt(p->y) < HUD_HEIGHT) p->y = FIX16(WORLD_H - 1);
+    if (fix16ToInt(p->y) >= WORLD_H)   p->y = FIX16(HUD_HEIGHT);
+
+    /* Wall / background collision */
+    if (p->active && p->invincible == 0)
+        player_wall_collide(p, gd);
 
     /* --- Firing (Button A or C) --- */
     if (p->shoot_cooldown > 0)
@@ -168,25 +247,22 @@ void player_update(Player *p, GameData *gd)
     }
 
     /* --- Draw --- */
-    player_draw(p);
+    player_draw(p, gd);
 }
 
 /* ============================================================
  * PLAYER DRAW
  * ============================================================ */
-void player_draw(Player *p)
+void player_draw(Player *p, GameData *gd)
 {
     if (!p->active) return;
     SPR_setPosition(p->spr,
-                    fix16ToInt(p->x) - 8,
-                    fix16ToInt(p->y) - 8);
-    /* spr_ship has 8 frames in Direction order (0=RIGHT .. 7=DOWN_RIGHT).
-     * Simply set the frame to the current direction index. */
+                    fix16ToInt(p->x) - 8 - gd->cam_x,
+                    fix16ToInt(p->y) - 8 - gd->cam_y);
     if (p->dir != DIR_NONE)
         SPR_setFrame(p->spr, (u16)p->dir);
-    SPR_setHFlip(p->spr, FALSE);   /* no flipping needed */
+    SPR_setHFlip(p->spr, FALSE);
 }
-
 /* ============================================================
  * PLAYER DIE
  * ============================================================ */
@@ -219,8 +295,8 @@ void player_die(Player *p, GameData *gd)
     }
 
     /* Respawn at centre with invincibility frames */
-    p->x          = FIX16(SCREEN_W / 2);
-    p->y          = FIX16(SCREEN_H / 2);
+    p->x          = FIX16(WORLD_W / 2);
+    p->y          = FIX16(WORLD_H / 2);
     p->vx         = FIX16(0);
     p->vy         = FIX16(0);
     p->invincible = 120;   /* 2 seconds @ 60fps */

@@ -17,6 +17,7 @@
 GameData gd;           /* global (accessed by screens.c pause quit) */
 u32 g_frame_count;     /* global frame counter, used by AI in enemy.c */
 u8 g_two_player = FALSE;   /* defined here, declared extern in player2.h */
+fix16 g_game_speed = FIX16(1);  /* game speed scalar, reset each level */
 
 /* ============================================================
  * FORWARD DECLARATIONS
@@ -64,11 +65,20 @@ int main(bool hard_reset)
  * ============================================================ */
 static void sys_init(void)
 {
+    /* Set VDP plane size to 64×64 tiles (512×512 px) BEFORE SPR_initEx.
+     * This must happen first — SPR_initEx sets up internal VRAM layout
+     * that depends on the plane size already being configured.
+     * We need 512×512 to hold the 392×320 world with hardware scrolling. */
+    VDP_setPlaneSize(64, 64, TRUE);
+
     /* Initialise SGDK sprite engine with 512 VRAM tiles reserved */
     SPR_initEx(512);
 
     /* Set display to hi-res mode (320×224) */
     VDP_setScreenWidth320();
+
+    /* Full-screen horizontal scroll mode (one scroll value for whole screen) */
+    VDP_setScrollingMode(HSCROLL_PLANE, VSCROLL_PLANE);
 
     /* Enable vertical interrupt for frame timing */
     SYS_setVIntCallback(vblank_callback);
@@ -101,12 +111,24 @@ void game_init(void)
     /* Zero the game state */
     memset(&gd, 0, sizeof(GameData));
 
+    /* Portal idle sentinel: -1 means no portal animation running.
+     * memset gives 0 which would immediately trigger — set explicitly. */
+    gd.portal_left_cd  = -1;
+    gd.portal_right_cd = -1;
+
+    /* Camera starts centred on the world */
+    gd.cam_x = CAM_MAX_X / 2;  /* start viewport centred on world */
+    gd.cam_y = CAM_MAX_Y / 2;
+
+    /* Reset game speed ramp */
+    g_game_speed = FIX16(1);
+
     /* Initial player positions */
     player_init(&gd.player,
-                FIX16(SCREEN_W / 2),
-                FIX16(SCREEN_H / 2));
+                FIX16(WORLD_W / 2),
+                FIX16(WORLD_H / 2));
     /* Player 2 starts at offset position */
-    player2_init(FIX16(SCREEN_W / 4), FIX16(SCREEN_H / 2));
+    player2_init(FIX16(WORLD_W / 4), FIX16(WORLD_H / 2));
 
     gd.level  = 1;
     gd.state  = STATE_GAME;
@@ -165,6 +187,7 @@ void game_run(void)
         level_check_complete(&gd);
 
         /* ---- Draw ---- */
+        camera_update(&gd);
         SPR_update();
         hud_draw(&gd);
 

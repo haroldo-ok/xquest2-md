@@ -24,6 +24,10 @@
 #include "xquest.h"
 #include "screens.h"
 
+/* Globals defined in main.c, accessed here for pause-quit and 2P setup */
+extern GameData gd;
+extern u8       g_two_player;
+
 /* ────────────────────────────────────────────────
  * HOF constants
  * ──────────────────────────────────────────────── */
@@ -446,7 +450,6 @@ void screen_pause(void)
         if (pressed & BUTTON_A)
         {
             /* Quit to title — caller sees STATE_GAME_OVER */
-            extern GameData gd;   /* access the global */
             gd.state = STATE_GAME_OVER;
             gd.player.lives = 0;
             break;
@@ -553,7 +556,6 @@ u8 screen_options(void)
     draw_centred("A: YES    B: NO", 19);
 
     /* Wait for 2P choice */
-    extern u8 g_two_player;
     prev_joy = JOY_readJoypad(JOY_1);
     while (TRUE)
     {

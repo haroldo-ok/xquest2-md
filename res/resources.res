@@ -29,6 +29,11 @@ SPRITE  spr_mine        "sprites/mine_f0_00.png"      2 2 NONE
 # Exit Gate (16x16, PAL2, 9 frame open animation)
 SPRITE  spr_gate        "sprites/gate_exit_f0_00.png" 2 2 NONE
 
+# Enemy spawn portal (16x24, PAL1, 5 frame open animation)
+# Displayed on left and right walls at screen midpoint when enemies enter.
+# Frame 0 = closed wall, frame 4 = fully open.
+SPRITE  spr_portal      "sprites/portal_00.png"        2 3 NONE
+
 # PowerCharge pickup (16x16, PAL2)
 SPRITE  spr_powercharge "sprites/item_powercharge_00.png" 2 2 NONE
 

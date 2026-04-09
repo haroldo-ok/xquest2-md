@@ -67,6 +67,7 @@
 #define SFX_EXTRA_LIFE     SFX_BANK_FANFARE
 #define SFX_LEVEL_CLEAR    SFX_BANK_FANFARE
 #define SFX_GATE_OPEN      SFX_BANK_FANFARE
+#define SFX_ENEMY_ENTER    SFX_BANK_BLIP      /* portal opens, enemy enters */
 #define SFX_TITLE          SFX_BANK_TITLE
 
 /* ────────────────────────────────────────────────

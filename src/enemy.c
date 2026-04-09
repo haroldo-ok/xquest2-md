@@ -544,9 +544,9 @@ void enemies_update(GameData *gd)
             e->vx = fix16Abs(e->vx);
         }
         /* Right boundary */
-        else if (ex > SCREEN_W - 10)
+        else if (ex > WORLD_W - 10)
         {
-            e->x  = FIX16(SCREEN_W - 10);
+            e->x  = FIX16(WORLD_W - 10);
             e->vx = -fix16Abs(e->vx);
         }
         /* Top boundary (below HUD) */
@@ -556,9 +556,9 @@ void enemies_update(GameData *gd)
             e->vy = fix16Abs(e->vy);
         }
         /* Bottom boundary */
-        else if (ey > SCREEN_H - 10)
+        else if (ey > WORLD_H - 10)
         {
-            e->y  = FIX16(SCREEN_H - 10);
+            e->y  = FIX16(WORLD_H - 10);
             e->vy = -fix16Abs(e->vy);
         }
 
@@ -567,7 +567,7 @@ void enemies_update(GameData *gd)
          * matching original "collision with enemy inlets" check. */
         ex = fix16ToInt(e->x);
         ey = fix16ToInt(e->y);
-        s16 mid_y = (HUD_HEIGHT + SCREEN_H) / 2;
+        s16 mid_y = (HUD_HEIGHT + WORLD_H) / 2;
         if (ey < mid_y - 10 || ey > mid_y + 10)   /* not at portal row */
         {
             if (ex < 20)
@@ -575,9 +575,9 @@ void enemies_update(GameData *gd)
                 e->x  = FIX16(20);
                 e->vx = fix16Abs(e->vx);
             }
-            else if (ex > SCREEN_W - 20)
+            else if (ex > WORLD_W - 20)
             {
-                e->x  = FIX16(SCREEN_W - 20);
+                e->x  = FIX16(WORLD_W - 20);
                 e->vx = -fix16Abs(e->vx);
             }
         }
@@ -611,8 +611,8 @@ void enemies_update(GameData *gd)
 
         /* Update sprite position */
         if (e->spr) SPR_setPosition(e->spr,
-                        fix16ToInt(e->x) - 8,
-                        fix16ToInt(e->y) - 8);
+                        fix16ToInt(e->x) - 8 - gd->cam_x,
+                        fix16ToInt(e->y) - 8 - gd->cam_y);
     }
 }
 

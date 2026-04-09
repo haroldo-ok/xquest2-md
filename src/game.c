@@ -283,8 +283,8 @@ void gems_init(GameData *gd, u8 count)
         Gem *g = &gd->gems[i];
         /* Random position on open floor tiles */
         do {
-            g->x = FIX16(16 + random() % (SCREEN_W - 32));
-            g->y = FIX16(HUD_HEIGHT + 16 + random() % (SCREEN_H - HUD_HEIGHT - 32));
+            g->x = FIX16(16 + random() % (WORLD_W - 32));
+            g->y = FIX16(HUD_HEIGHT + 16 + random() % (WORLD_H - HUD_HEIGHT - 32));
         } while (tilemap_is_solid(gd, fix16ToInt(g->x)/TILE_W, (fix16ToInt(g->y)-HUD_HEIGHT)/TILE_H));
 
         g->collected = FALSE;
@@ -304,7 +304,9 @@ void gems_update(GameData *gd)
     {
         Gem *g = &gd->gems[i];
         if (!g->active) continue;
-        if (g->spr) SPR_setPosition(g->spr, fix16ToInt(g->x)-8, fix16ToInt(g->y)-8);
+        if (g->spr) SPR_setPosition(g->spr,
+            fix16ToInt(g->x) - 8 - gd->cam_x,
+            fix16ToInt(g->y) - 8 - gd->cam_y);
     }
 }
 
@@ -342,7 +344,7 @@ void bullets_update(GameData *gd)
         b->y = fix16Add(b->y, b->vy);
         /* Destroy if off screen */
         s16 bx = fix16ToInt(b->x), by = fix16ToInt(b->y);
-        if (bx < 0 || bx >= SCREEN_W || by < HUD_HEIGHT || by >= SCREEN_H)
+        if (bx < 0 || bx >= WORLD_W  || by < HUD_HEIGHT || by >= WORLD_H)
         {
             b->active = FALSE;
             if (b->spr) { SPR_releaseSprite(b->spr); b->spr = NULL; }
@@ -359,7 +361,7 @@ void bullets_update(GameData *gd)
                 continue;
             }
         }
-        SPR_setPosition(b->spr, bx-4, by-4);
+        SPR_setPosition(b->spr, bx - 4 - gd->cam_x, by - 4 - gd->cam_y);
     }
 }
 
@@ -391,7 +393,9 @@ void mines_update(GameData *gd)
     {
         Mine *m = &gd->mines[i];
         if (!m->active) continue;
-        if (m->spr) SPR_setPosition(m->spr, fix16ToInt(m->x)-8, fix16ToInt(m->y)-8);
+        if (m->spr) SPR_setPosition(m->spr,
+            fix16ToInt(m->x) - 8 - gd->cam_x,
+            fix16ToInt(m->y) - 8 - gd->cam_y);
     }
 }
 
@@ -483,8 +487,8 @@ void level_generate(GameData *gd, u16 level_num)
             fix16 mx, my;
             u8 attempts = 0;
             do {
-                mx = FIX16(16 + (s16)(random() % (SCREEN_W - 32)));
-                my = FIX16(HUD_HEIGHT + 16 + (s16)(random() % (SCREEN_H - HUD_HEIGHT - 32)));
+                mx = FIX16(16 + (s16)(random() % (WORLD_W - 32)));
+                my = FIX16(HUD_HEIGHT + 16 + (s16)(random() % (WORLD_H - HUD_HEIGHT - 32)));
                 attempts++;
             } while (attempts < 30 &&
                      tilemap_is_solid(gd,
@@ -506,13 +510,14 @@ void level_generate(GameData *gd, u16 level_num)
     gd->gate_open        = FALSE;
     gd->gate_anim_frame  = 0;
     gd->gate_anim_timer  = 0;
-    gd->gate_x           = SCREEN_W / 2;   /* start at horizontal centre */
+    gd->gate_x           = WORLD_W / 2;    /* start at world horizontal centre */
     gd->gate_move_dir    = 1;              /* initially moving right */
     gd->gate_move_accum  = 0;
 
     /* Place gate sprite at top-centre, just below HUD */
+    /* Gate is centred on world width */
     gd->gate_spr = SPR_addSprite(&spr_gate,
-                                 SCREEN_W / 2 - 8,
+                                 WORLD_W / 2 - 8 - gd->cam_x,
                                  HUD_HEIGHT,
                                  TILE_ATTR(PAL_COLLECT, TRUE, FALSE, FALSE));
     if (gd->gate_spr)
@@ -662,7 +667,7 @@ void level_check_complete(GameData *gd)
      * We replicate this with an 8:8 accumulator:
      *   gate_move_accum += gate_move (from level table)
      *   when accum >= 64, shift gate_x by 1 pixel
-     * Gate bounces between x=20 and x=SCREEN_W-20. */
+     * Gate bounces between x=20 and x=WORLD_W-20. */
     if (gd->gate_spr)
     {
         u16 li = (gd->level > 0) ? ((gd->level - 1) % MAX_LEVEL_DATA) : 0;
@@ -677,9 +682,9 @@ void level_check_complete(GameData *gd)
                 gd->gate_x += gd->gate_move_dir;
 
                 /* Bounce at screen edges (original: MinGateX=20, MaxGateX=PageWidth-30) */
-                if (gd->gate_x >= SCREEN_W - 20)
+                if (gd->gate_x >= WORLD_W - 20)
                 {
-                    gd->gate_x = SCREEN_W - 20;
+                    gd->gate_x = WORLD_W - 20;
                     gd->gate_move_dir = -1;
                     /* Occasional random direction flip (original GateChangeDirProb) */
                 }
@@ -698,7 +703,7 @@ void level_check_complete(GameData *gd)
         }
 
         /* Update sprite position every frame */
-        SPR_setPosition(gd->gate_spr, gd->gate_x - 8, HUD_HEIGHT);
+        SPR_setPosition(gd->gate_spr, gd->gate_x - 8 - gd->cam_x, HUD_HEIGHT);
     }
 
     /* Check if player has flown through the open gate (fully open = frame 8) */
@@ -912,6 +917,66 @@ void sfx_stop(void)
 }
 
 /* ============================================================
+ * camera.c  — scroll the viewport to follow the player
+ *
+ * The world is WORLD_W x WORLD_H (392x320).
+ * The viewport is SCREEN_W x PLAYFIELD_H (320x208).
+ * cam_x/cam_y are the world coords of the top-left of the viewport.
+ *
+ * Scrolling rule (same as original CheckWallCollisions):
+ *   if (player_screen_x > viewport_right - BORDER)  scroll right
+ *   if (player_screen_x < viewport_left  + BORDER)  scroll left
+ *   same for Y, chase by (overshoot / 20 + 1) px per frame.
+ *
+ * Hardware scroll: VDP_setHorizontalScroll(BG_B, -cam_x)
+ *                  VDP_setVerticalScroll  (BG_B,  cam_y)
+ * (H-scroll is negative because the plane moves left when cam moves right)
+ * ============================================================ */
+void camera_update(GameData *gd)
+{
+    s16 px = fix16ToInt(gd->player.x);
+    s16 py = fix16ToInt(gd->player.y) - HUD_HEIGHT;  /* playfield-relative */
+
+    /* Horizontal */
+    s16 right_edge = gd->cam_x + SCREEN_W - CAM_BORDER_H;
+    s16 left_edge  = gd->cam_x + CAM_BORDER_H;
+    if (px > right_edge)
+    {
+        s16 delta = (px - right_edge) / 20 + 1;
+        gd->cam_x += delta;
+        if (gd->cam_x > CAM_MAX_X) gd->cam_x = CAM_MAX_X;
+    }
+    else if (px < left_edge)
+    {
+        s16 delta = (left_edge - px) / 20 + 1;
+        gd->cam_x -= delta;
+        if (gd->cam_x < 0) gd->cam_x = 0;
+    }
+
+    /* Vertical */
+    s16 bottom_edge = gd->cam_y + PLAYFIELD_H - CAM_BORDER_V;
+    s16 top_edge    = gd->cam_y + CAM_BORDER_V;
+    if (py > bottom_edge)
+    {
+        s16 delta = (py - bottom_edge) / 20 + 1;
+        gd->cam_y += delta;
+        if (gd->cam_y > CAM_MAX_Y) gd->cam_y = CAM_MAX_Y;
+    }
+    else if (py < top_edge)
+    {
+        s16 delta = (top_edge - py) / 20 + 1;
+        gd->cam_y -= delta;
+        if (gd->cam_y < 0) gd->cam_y = 0;
+    }
+
+    /* Apply to VDP hardware scrolling.
+     * H-scroll: negative value shifts plane left (cam moves right = plane shifts left).
+     * V-scroll: positive value shifts plane down (cam moves down = plane shifts up). */
+    VDP_setHorizontalScroll(BG_B, -gd->cam_x);
+    VDP_setVerticalScroll(BG_B, gd->cam_y);
+}
+
+/* ============================================================
  * hud.c
  * ============================================================ */
 void hud_draw(GameData *gd)
@@ -1019,8 +1084,8 @@ void level_next(GameData *gd)
 
     /* Re-init player at centre (keeps score/lives) */
     player_init(&gd->player,
-                FIX16(SCREEN_W / 2),
-                FIX16(SCREEN_H / 2));
+                FIX16(WORLD_W / 2),
+                FIX16(WORLD_H / 2));
 
     /* Also null enemy/mine/gem/bullet sprite handles — SPR_reset freed them */
     for (u8 i = 0; i < MAX_ENEMIES;    i++) { gd->enemies[i].active = FALSE;    gd->enemies[i].spr    = NULL; }

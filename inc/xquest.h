@@ -17,11 +17,28 @@
 #define PLAYFIELD_H         208     /* minus HUD bar top+bottom */
 #define HUD_HEIGHT           16
 
+/* World dimensions (logical play area, larger than viewport — same as original).
+ * Original: PageWidth=392, PageHeight=320, PhysicalPageWidth=320,
+ *           SplitScreenLine=217 (our PLAYFIELD_H=208, close enough).
+ * Scroll range: H = WORLD_W - SCREEN_W = 72 px
+ *               V = WORLD_H - PLAYFIELD_H = 112 px */
+#define WORLD_W             392
+#define WORLD_H             320
+
+/* Camera scroll limits */
+#define CAM_MAX_X           (WORLD_W - SCREEN_W)    /* 72  */
+#define CAM_MAX_Y           (WORLD_H - PLAYFIELD_H) /* 112 */
+
+/* Scroll border: how close the player gets to the viewport edge before the
+ * camera starts following. Matches original ScreenHBorder/ScreenVBorder. */
+#define CAM_BORDER_H        140     /* original: PhysicalPageWidth/2 - 20 */
+#define CAM_BORDER_V        104     /* original: SplitScrnScanLine/2     */
+
 /* Tile dimensions */
 #define TILE_W               16
 #define TILE_H               16
-#define MAP_TILES_W          20     /* 320 / 16 */
-#define MAP_TILES_H          13     /* 208 / 16 */
+#define MAP_TILES_W          25     /* WORLD_W / 16  (ceil(392/16)=25)   */
+#define MAP_TILES_H          20     /* WORLD_H / 16  (ceil(320/16)=20)   */
 
 /* ============================================================
  * GAME CONSTANTS (preserved from original)
@@ -310,6 +327,10 @@ typedef struct {
     u8   difficulty;       /* 0=easy, 1=normal, 2=hard, 3=insane */
     GameState state;
 
+    /* Camera scroll position (top-left of viewport in world space) */
+    s16  cam_x;   /* 0 .. CAM_MAX_X (72)  */
+    s16  cam_y;   /* 0 .. CAM_MAX_Y (112) */
+
     /* Enemy spawn portals (left and right side inlets).
      * countdown > 0 means a portal is animating open/closed.
      * At countdown==0 the enemy enters. enemy_type holds the type queued. */
@@ -338,7 +359,7 @@ void title_show(void);
 /* player.c */
 void player_init(Player *p, fix16 x, fix16 y);
 void player_update(Player *p, GameData *gd);
-void player_draw(Player *p);
+void player_draw(Player *p, GameData *gd);
 void player_die(Player *p, GameData *gd);
 
 /* enemy.c */
@@ -378,6 +399,9 @@ u8   rects_overlap(fix16 ax, fix16 ay, u8 aw, u8 ah,
 /* sfx.c */
 void sfx_init(void);
 void sfx_play(u8 sfx_id);
+
+/* camera */
+void camera_update(GameData *gd);
 
 /* hud.c */
 void hud_draw(GameData *gd);

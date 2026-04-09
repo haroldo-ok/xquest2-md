@@ -24,7 +24,7 @@
 /* Return TRUE if pixel (px,py) is inside a solid tile */
 static u8 pixel_solid(const GameData *gd, s16 px, s16 py)
 {
-    if (px < 0 || px >= SCREEN_W || py < HUD_HEIGHT || py >= SCREEN_H)
+    if (px < 0 || px >= WORLD_W  || py < HUD_HEIGHT || py >= WORLD_H)
         return TRUE;   /* treat off-screen as solid */
     u8 tx, ty;
     tilemap_cell_at_pixel(px, py, &tx, &ty);
@@ -184,11 +184,11 @@ void player_update(Player *p, GameData *gd)
     p->x = fix16Add(p->x, p->vx);
     p->y = fix16Add(p->y, p->vy);
 
-    /* Screen wrap (original XQuest wraps at edges) */
-    if (fix16ToInt(p->x) < 0)          p->x = FIX16(SCREEN_W - 1);
-    if (fix16ToInt(p->x) >= SCREEN_W)  p->x = FIX16(0);
-    if (fix16ToInt(p->y) < HUD_HEIGHT) p->y = FIX16(SCREEN_H - 1);
-    if (fix16ToInt(p->y) >= SCREEN_H)  p->y = FIX16(HUD_HEIGHT);
+    /* World wrap — wrap at world edges (WORLD_W x WORLD_H), not screen edges */
+    if (fix16ToInt(p->x) < 0)          p->x = FIX16(WORLD_W - 1);
+    if (fix16ToInt(p->x) >= WORLD_W)   p->x = FIX16(0);
+    if (fix16ToInt(p->y) < HUD_HEIGHT) p->y = FIX16(WORLD_H - 1);
+    if (fix16ToInt(p->y) >= WORLD_H)   p->y = FIX16(HUD_HEIGHT);
 
     /* Wall / background collision */
     if (p->active && p->invincible == 0)
@@ -247,25 +247,22 @@ void player_update(Player *p, GameData *gd)
     }
 
     /* --- Draw --- */
-    player_draw(p);
+    player_draw(p, gd);
 }
 
 /* ============================================================
  * PLAYER DRAW
  * ============================================================ */
-void player_draw(Player *p)
+void player_draw(Player *p, GameData *gd)
 {
     if (!p->active) return;
     SPR_setPosition(p->spr,
-                    fix16ToInt(p->x) - 8,
-                    fix16ToInt(p->y) - 8);
-    /* spr_ship has 8 frames in Direction order (0=RIGHT .. 7=DOWN_RIGHT).
-     * Simply set the frame to the current direction index. */
+                    fix16ToInt(p->x) - 8 - gd->cam_x,
+                    fix16ToInt(p->y) - 8 - gd->cam_y);
     if (p->dir != DIR_NONE)
         SPR_setFrame(p->spr, (u16)p->dir);
-    SPR_setHFlip(p->spr, FALSE);   /* no flipping needed */
+    SPR_setHFlip(p->spr, FALSE);
 }
-
 /* ============================================================
  * PLAYER DIE
  * ============================================================ */
@@ -298,8 +295,8 @@ void player_die(Player *p, GameData *gd)
     }
 
     /* Respawn at centre with invincibility frames */
-    p->x          = FIX16(SCREEN_W / 2);
-    p->y          = FIX16(SCREEN_H / 2);
+    p->x          = FIX16(WORLD_W / 2);
+    p->y          = FIX16(WORLD_H / 2);
     p->vx         = FIX16(0);
     p->vy         = FIX16(0);
     p->invincible = 120;   /* 2 seconds @ 60fps */

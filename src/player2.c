@@ -47,7 +47,7 @@ static const fix16 P2_DVY[8] = {
 
 static u8 p2_pixel_solid(const GameData *gd, s16 px, s16 py)
 {
-    if (px < 0 || px >= SCREEN_W || py < HUD_HEIGHT || py >= SCREEN_H)
+    if (px < 0 || px >= WORLD_W  || py < HUD_HEIGHT || py >= WORLD_H)
         return TRUE;
     u8 tx, ty;
     tilemap_cell_at_pixel(px, py, &tx, &ty);
@@ -180,10 +180,11 @@ void player2_update(GameData *gd)
     p->y = fix16Add(p->y, p->vy);
 
     /* Screen wrap */
-    if (fix16ToInt(p->x) < 0)          p->x = FIX16(SCREEN_W - 1);
-    if (fix16ToInt(p->x) >= SCREEN_W)  p->x = FIX16(0);
-    if (fix16ToInt(p->y) < HUD_HEIGHT) p->y = FIX16(SCREEN_H - 1);
-    if (fix16ToInt(p->y) >= SCREEN_H)  p->y = FIX16(HUD_HEIGHT);
+    /* World wrap */
+    if (fix16ToInt(p->x) < 0)         p->x = FIX16(WORLD_W - 1);
+    if (fix16ToInt(p->x) >= WORLD_W)  p->x = FIX16(0);
+    if (fix16ToInt(p->y) < HUD_HEIGHT) p->y = FIX16(WORLD_H - 1);
+    if (fix16ToInt(p->y) >= WORLD_H)  p->y = FIX16(HUD_HEIGHT);
 
     /* Wall collision */
     if (p->active && p->invincible == 0)
@@ -243,7 +244,9 @@ void player2_update(GameData *gd)
     /* Update sprite */
     if (p->spr)
     {
-        SPR_setPosition(p->spr, fix16ToInt(p->x) - 8, fix16ToInt(p->y) - 8);
+        SPR_setPosition(p->spr,
+                        fix16ToInt(p->x) - 8 - gd->cam_x,
+                        fix16ToInt(p->y) - 8 - gd->cam_y);
         if (p->dir != DIR_NONE)
             SPR_setFrame(p->spr, (u16)p->dir);
     }
@@ -324,8 +327,8 @@ void player2_die(GameData *gd)
         return;
     }
 
-    p->x = FIX16(SCREEN_W / 4);
-    p->y = FIX16(SCREEN_H / 2);
+    p->x = FIX16(WORLD_W / 4);
+    p->y = FIX16(WORLD_H / 2);
     p->vx = p->vy = FIX16(0);
     p->invincible = 120;
 }

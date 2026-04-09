@@ -203,7 +203,7 @@ void player_update(Player *p, GameData *gd)
         /* Bullet velocity in current direction */
         fix16 bvx = fix16Mul(DIR_DVX[p->dir], BULLET_SPEED);
         fix16 bvy = fix16Mul(DIR_DVY[p->dir], BULLET_SPEED);
-        bullet_fire(gd, p->x, p->y, bvx, bvy, TRUE);
+        bullet_fire(gd, p->x, p->y, bvx, bvy, BULLET_PLAYER);
         p->shoot_cooldown = SHIP_FIRE_COOLDOWN;
         sfx_play(SFX_SHOOT);   /* sfx_7 = short sweep / shoot sound */
     }

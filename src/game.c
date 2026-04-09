@@ -526,7 +526,7 @@ void level_generate(GameData *gd, u16 level_num)
      * Portals are world-fixed at Y = HUD_HEIGHT + WORLD_H/2, adjusted by cam_y. */
     /* Portal sprites: world-fixed Y = HUD_HEIGHT + WORLD_H/2, adjusted by cam_y */
     gd->portal_left_spr = SPR_addSprite(&spr_portal,
-                                        0,
+                                        0 - gd->cam_x,
                                         (HUD_HEIGHT + WORLD_H / 2) - gd->cam_y - 12,
                                         TILE_ATTR(PAL_ACTIVE, TRUE, FALSE, FALSE));
     if (gd->portal_left_spr)
@@ -538,7 +538,7 @@ void level_generate(GameData *gd, u16 level_num)
     /* Right portal: mirror of left, placed at right edge.
      * Flip horizontally so the opening faces inward. */
     gd->portal_right_spr = SPR_addSprite(&spr_portal,
-                                         SCREEN_W - 16,
+                                         WORLD_W - 16 - gd->cam_x,
                                          (HUD_HEIGHT + WORLD_H / 2) - gd->cam_y - 12,
                                          TILE_ATTR(PAL_ACTIVE, TRUE, FALSE, FALSE));
     if (gd->portal_right_spr)
@@ -972,9 +972,11 @@ void camera_update(GameData *gd)
     {
         s16 portal_screen_y = (HUD_HEIGHT + WORLD_H / 2) - gd->cam_y - 12;
         if (gd->portal_left_spr)
-            SPR_setPosition(gd->portal_left_spr, 0, portal_screen_y);
+            SPR_setPosition(gd->portal_left_spr,
+                            0 - gd->cam_x, portal_screen_y);
         if (gd->portal_right_spr)
-            SPR_setPosition(gd->portal_right_spr, SCREEN_W - 16, portal_screen_y);
+            SPR_setPosition(gd->portal_right_spr,
+                            WORLD_W - 16 - gd->cam_x, portal_screen_y);
     }
 }
 

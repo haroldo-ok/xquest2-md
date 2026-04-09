@@ -441,7 +441,8 @@ void level_generate(GameData *gd, u16 level_num)
     /* Clear tilemap - all floor */
     memset(gd->tilemap, 0, sizeof(gd->tilemap));
 
-    /* Generate wall border */
+    /* Border walls only — the original XQuest has an open playfield with
+     * just a decorative border. No interior walls exist in the original. */
     for (u8 x = 0; x < MAP_TILES_W; x++)
     {
         gd->tilemap[0][x] = TILE_WALL;
@@ -451,23 +452,6 @@ void level_generate(GameData *gd, u16 level_num)
     {
         gd->tilemap[y][0] = TILE_WALL;
         gd->tilemap[y][MAP_TILES_W-1] = TILE_WALL;
-    }
-
-    /* Random interior walls (count scales with level) */
-    u8 wall_count = 5 + (u8)(level_num / 3);
-    if (wall_count > 20) wall_count = 20;
-    for (u8 w = 0; w < wall_count; w++)
-    {
-        u8 wx = 1 + (u8)(random() % (MAP_TILES_W - 2));
-        u8 wy = 1 + (u8)(random() % (MAP_TILES_H - 2));
-        u8 wlen = 2 + (u8)(random() % 4);
-        u8 horiz = (u8)(random() & 1);
-        for (u8 i = 0; i < wlen; i++)
-        {
-            u8 tx = horiz ? MIN(wx+i, MAP_TILES_W-2) : wx;
-            u8 ty = horiz ? wy : MIN(wy+i, MAP_TILES_H-2);
-            gd->tilemap[ty][tx] = TILE_WALL;
-        }
     }
 
     /* Apply difficulty scaling */

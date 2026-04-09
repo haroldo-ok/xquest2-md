@@ -523,11 +523,11 @@ void level_generate(GameData *gd, u16 level_num)
 
     /* Left portal: anchored at x=0, vertically centred on screen midpoint.
      * The sprite is 16 wide × 24 tall; its left edge lines up with x=0.
-     * Portals sit at PORTAL_SCREEN_Y (screen-fixed vertical midpoint). */
-    /* Portal sprites are screen-fixed — Y is always at viewport vertical midpoint */
+     * Portals are world-fixed at Y = HUD_HEIGHT + WORLD_H/2, adjusted by cam_y. */
+    /* Portal sprites: world-fixed Y = HUD_HEIGHT + WORLD_H/2, adjusted by cam_y */
     gd->portal_left_spr = SPR_addSprite(&spr_portal,
                                         0,
-                                        PORTAL_SCREEN_Y - 12,
+                                        (HUD_HEIGHT + WORLD_H / 2) - gd->cam_y - 12,
                                         TILE_ATTR(PAL_ACTIVE, TRUE, FALSE, FALSE));
     if (gd->portal_left_spr)
     {
@@ -539,7 +539,7 @@ void level_generate(GameData *gd, u16 level_num)
      * Flip horizontally so the opening faces inward. */
     gd->portal_right_spr = SPR_addSprite(&spr_portal,
                                          SCREEN_W - 16,
-                                         PORTAL_SCREEN_Y - 12,
+                                         (HUD_HEIGHT + WORLD_H / 2) - gd->cam_y - 12,
                                          TILE_ATTR(PAL_ACTIVE, TRUE, FALSE, FALSE));
     if (gd->portal_right_spr)
     {
@@ -793,7 +793,7 @@ void level_check_complete(GameData *gd)
                     enemy_spawn(&gd->enemies[(u8)slot],
                                 (EnemyType)gd->portal_left_type,
                                 FIX16(PORTAL_LEFT_X + 8),
-                                FIX16(gd->cam_y + PORTAL_SCREEN_Y));
+                                FIX16(HUD_HEIGHT + WORLD_H / 2));
                     /* Give initial rightward velocity */
                     gd->enemies[(u8)slot].vx = FIX16(1.0);
                     sfx_play(SFX_ENEMY_ENTER);
@@ -834,7 +834,7 @@ void level_check_complete(GameData *gd)
                     enemy_spawn(&gd->enemies[(u8)slot],
                                 (EnemyType)gd->portal_right_type,
                                 FIX16(PORTAL_RIGHT_X - 8),
-                                FIX16(gd->cam_y + PORTAL_SCREEN_Y));
+                                FIX16(HUD_HEIGHT + WORLD_H / 2));
                     /* Give initial leftward velocity */
                     gd->enemies[(u8)slot].vx = FIX16(-1.0);
                     sfx_play(SFX_ENEMY_ENTER);
@@ -964,10 +964,18 @@ void camera_update(GameData *gd)
     /* Portal sprites are screen-fixed: always at the left/right wall edges,
      * vertically centred on the viewport. Reposition every frame so they
      * don't drift with vertical camera scroll. */
-    if (gd->portal_left_spr)
-        SPR_setPosition(gd->portal_left_spr, 0, PORTAL_SCREEN_Y - 12);
-    if (gd->portal_right_spr)
-        SPR_setPosition(gd->portal_right_spr, SCREEN_W - 16, PORTAL_SCREEN_Y - 12);
+    /* Portal sprites are world-fixed: their world Y is WORLD_H/2+HUD_HEIGHT.
+     * Subtract cam offsets to get screen position, like all other world objects.
+     * X stays at screen edges (no horizontal offset needed — portals are at x=0
+     * and x=WORLD_W-16 in world space, and cam_x max is only 72px so they are
+     * always at or near the screen edge). */
+    {
+        s16 portal_screen_y = (HUD_HEIGHT + WORLD_H / 2) - gd->cam_y - 12;
+        if (gd->portal_left_spr)
+            SPR_setPosition(gd->portal_left_spr, 0, portal_screen_y);
+        if (gd->portal_right_spr)
+            SPR_setPosition(gd->portal_right_spr, SCREEN_W - 16, portal_screen_y);
+    }
 }
 
 /* ============================================================

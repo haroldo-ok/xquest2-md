@@ -75,7 +75,7 @@ SPRITE  spr_meeby           "sprites/meeby.png"         3 3 NONE
 # Retaliator: 11x13 -> 2x2 tiles, 4 frames
 SPRITE  spr_retaliator      "sprites/retaliator.png"    2 2 NONE
 # Terrier: 21x8 -> 3x1 tiles, 4 frames
-SPRITE  spr_terrier         "sprites/terrier.png"       3 1 NONE
+SPRITE  spr_terrier         "sprites/terrier.png"       2 1 NONE
 # Doinger: 12x12 -> 2x2 tiles, 4 frames
 SPRITE  spr_doinger         "sprites/doinger.png"       2 2 NONE
 # Snipe: 9x9 -> 2x2 tiles, 4 frames

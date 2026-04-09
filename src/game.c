@@ -22,6 +22,125 @@
 #include "resources.h"
 
 /* ============================================================
+ * LEVEL DEFINITIONS  (from original xqvars.pas)
+ * erelease_prob: original float probability × 65535, stored as u16.
+ * e.g. 0.005 × 65535 = 328, 0.01 × 65535 = 655, 0.025 × 65535 = 1638
+ * ============================================================ */
+const LevelDef g_levels[MAX_LEVEL_DATA] = {
+/*  cryst mine maxen erel   gateW  gmov  tpar   newman */
+/* 1 */  { 15,  0, 20,  328, 27, 0, 20, 15000 },
+/* 2 */  { 16,  3,  4,  328, 27, 0, 20, 15000 },
+/* 3 */  { 17,  4,  5,  328, 26, 0, 20, 15000 },
+/* 4 */  { 18,  5,  6,  328, 26, 0, 25, 15000 },
+/* 5 */  { 19,  6,  7,  328, 25, 0, 25, 15000 },
+/* 6 */  { 20,  6,  8,  328, 25, 0, 30, 15000 },
+/* 7 */  { 21,  7,  9,  328, 24, 0, 30, 15000 },
+/* 8 */  { 22,  7, 10,  393, 24, 0, 35, 20000 },
+/* 9 */  { 23,  8, 10,  393, 23, 0, 35, 20000 },
+/* 10 */ { 24,  8, 10,  393, 23, 0, 40, 20000 },
+/* 11 */ { 24,  9, 10,  393, 22, 0, 40, 20000 },
+/* 12 */ { 25,  9, 10,  458, 22, 0, 45, 20000 },
+/* 13 */ { 25, 10, 10,  458, 21, 0, 45, 40000 },
+/* 14 */ { 26, 10, 10,  524, 21, 0, 45, 40000 },
+/* 15 */ { 26, 10, 10,  524, 20, 0, 50, 40000 },
+/* 16 */ { 27, 11, 10,  589, 20, 0, 50, 40000 },
+/* 17 */ { 27, 11, 10,  589, 19, 0, 50, 40000 },
+/* 18 */ { 28, 11, 10,  655, 19, 0, 55, 40000 },
+/* 19 */ { 28, 12, 10,  655, 18, 0, 55, 40000 },
+/* 20 */ { 29, 12, 10,  655, 18, 0, 55, 40000 },
+/* 21 */ { 29, 12, 10,  655, 17, 0, 60, 70000 },
+/* 22 */ { 30, 13, 10,  655, 17, 0, 60, 70000 },
+/* 23 */ { 30, 13, 10,  655, 17, 0, 60, 70000 },
+/* 24 */ { 31, 13, 10,  655, 17, 0, 60, 70000 },
+/* 25 */ { 31, 13, 10,  655, 17, 0, 65, 70000 },
+/* 26 */ { 32, 14, 10,  655, 17, 0, 65, 70000 },
+/* 27 */ { 32, 14, 11,  655, 17, 0, 65, 70000 },
+/* 28 */ { 33, 14, 11,  655, 17, 0, 65, 70000 },
+/* 29 */ { 33, 14, 12,  655, 17, 0, 70, 70000 },
+/* 30 */ { 34, 15, 12,  655, 17, 0, 70, 70000 },
+/* 31 */ { 34, 15, 13,  655, 17, 0, 70, 70000 },
+/* 32 */ { 35, 15, 13,  655, 17, 0, 70, 70000 },
+/* 33 */ { 35, 15, 14,  655, 17,10, 75,100000 },
+/* 34 */ { 36, 16, 14,  655, 17,20, 75,100000 },
+/* 35 */ { 36, 16, 15,  655, 17,30, 75,100000 },
+/* 36 */ { 37, 16, 15,  655, 17,40, 75,100000 },
+/* 37 */ { 37, 16, 16, 1638, 17,50, 80,100000 },
+/* 38 */ { 38, 17, 16,  720, 17,60, 80,100000 },
+/* 39 */ { 38, 17, 17,  786, 17,70, 80,100000 },
+/* 40 */ { 39, 17, 17,  786, 17,80, 80,100000 },
+/* 41 */ { 39, 17, 18,  852, 17,90, 85,100000 },
+/* 42 */ { 40, 18, 18,  852, 17,100,85,100000 },
+/* 43 */ { 40, 18, 19,  917, 17,100,85,100000 },
+/* 44 */ { 40, 18, 19,  917, 17,100,85,100000 },
+/* 45 */ { 40, 18, 20,  983, 17,100,90,100000 },
+/* 46 */ { 40, 19, 20, 1048, 17,100,90,100000 },
+/* 47 */ { 40, 19, 20, 1048, 17,100,90,100000 },
+/* 48 */ { 40, 19, 20, 1114, 17,100,90,100000 },
+/* 49 */ { 40, 19, 20, 1114, 17,100,90,100000 },
+/* 50 */ { 40, 20, 20, 1179, 17,100,90,100000 },
+};
+
+/* Enemy type probability weights per level.
+ * Columns: GRUNGER ZIPPO ZINGER VINCE MINER MEEBY RETALIATOR TERRIER
+ *          DOINGER SNIPE TRIBBLER BUCKSHOT CLUSTER STICKTIGHT REPULSOR
+ * Derived from original probs[level][0..18] — skipping indices 0 (super),
+ * 1 (explosion), 5 (blank), 14 (blank) from the original 19-column table.
+ */
+const u8 g_level_probs[MAX_LEVEL_DATA][LEVEL_PROB_COUNT] = {
+/*       GR  ZP  ZI  VI  MI  ME  RE  TE  DO  SN  TR  BK  CL  ST  RP */
+/* 1 */  { 10, 10, 10, 10,  0, 10, 60,  0,  0,  0,  0,  0,  0,  0,  0 },
+/* 2 */  {  0,  0,  0,  0,  0,  0,  0,100,  0,  0,  0,  0,  0,  0,  0 },
+/* 3 */  { 10, 10, 10, 10,  0, 10,  3, 60,  0,  0,  0,  0,  0,  0,  0 },
+/* 4 */  {  0,  0,  0,  0,  0,  0,  0,  0,100,  0,  0,  0,  0,  0,  0 },
+/* 5 */  { 10, 10, 10, 10,  0, 10,  3,  3, 60,  0,  0,  0,  0,  0,  0 },
+/* 6 */  {  0,  0,  0,  0,  0,  0,  0,  0,  0,100,  0,  0,  0,  0,  0 },
+/* 7 */  { 10, 10, 10, 10,  0, 10, 10,  3,  3, 60,  0,  0,  0,  0,  0 },
+/* 8 */  {  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,100,  0,  0,  0,  0 },
+/* 9 */  { 10, 10, 10, 10,  0, 10, 10,  3,  3,  3, 60,  0,  0,  0,  0 },
+/* 10 */ { 10, 10, 10, 10,  0, 10, 10,  5,  3,  3, 60,  0,  0,  0,  0 },
+/* 11 */ {  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,100,  0,  0,  0 },
+/* 12 */ { 10, 10, 10, 10,  0, 10, 10, 10,  5,  3,  3, 60,  0,  0,  0 },
+/* 13 */ {  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,100,  0 },
+/* 14 */ { 10, 10, 10, 10,  0, 10, 10, 10,  5,  5,  3,  3,  0, 60,  0 },
+/* 15 */ {  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,100},
+/* 16 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10,  5,  5,  3,  0,  3, 60 },
+/* 17 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10,  5,  5,  5,  0,  3,  3 },
+/* 18 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10,  5,  5,  0,  3,  3 },
+/* 19 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10,  5,  0,  3,  3 },
+/* 20 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0,  5,  5 },
+/* 21 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
+/* 22 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
+/* 23 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
+/* 24 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
+/* 25 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
+/* 26 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
+/* 27 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
+/* 28 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
+/* 29 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
+/* 30 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
+/* 31 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
+/* 32 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
+/* 33 */ {  0,100,  0,100,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0 },
+/* 34 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
+/* 35 */ {  0,  0,  0,  0,  0, 50,  0,  0,  0,  0,  0,  0,  0, 50,  0 },
+/* 36 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
+/* 37 */ {  0,  0,  0,  0,  0,  0, 50,  0,  0,  0,  0, 50,  0,  0,  0 },
+/* 38 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
+/* 39 */ {  0,  0,  0,  0,  0,  0,  0, 50,  0, 50,  0,  0,  0,  0,  0 },
+/* 40 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
+/* 41 */ {  0,  0,  0,  0,  0,  0,  0,  0, 50,  0, 50,  0,  0,  0,  0 },
+/* 42 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
+/* 43 */ {  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 50, 50 },
+/* 44 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
+/* 45 */ {  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 50, 50 },
+/* 46 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
+/* 47 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
+/* 48 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
+/* 49 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
+/* 50 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
+};
+
+/* ============================================================
  * collision.c
  * ============================================================ */
 u8 rects_overlap(fix16 ax, fix16 ay, u8 aw, u8 ah,
@@ -45,7 +164,10 @@ void collision_check_all(GameData *gd)
         Enemy *e = &gd->enemies[i];
         if (!e->active) continue;
         if (rects_overlap(p->x, p->y, 10, 10, e->x, e->y, 12, 12))
+        {
             player_die(p, gd);
+            return;   /* one death per frame */
+        }
     }
 
     /* Player vs Mines */
@@ -56,9 +178,9 @@ void collision_check_all(GameData *gd)
         if (rects_overlap(p->x, p->y, 10, 10, m->x, m->y, 10, 10))
         {
             m->active = FALSE;
-            SPR_releaseSprite(m->spr);
-            m->spr = NULL;
+            if (m->spr) { SPR_releaseSprite(m->spr); m->spr = NULL; }
             player_die(p, gd);
+            return;
         }
     }
 
@@ -71,9 +193,8 @@ void collision_check_all(GameData *gd)
         {
             g->collected = TRUE;
             g->active    = FALSE;
-            SPR_releaseSprite(g->spr);
-            g->spr = NULL;
-            p->score += 50;
+            if (g->spr) { SPR_releaseSprite(g->spr); g->spr = NULL; }
+            p->score += 200;   /* original: 200 pts per crystal */
             gd->gems_remaining--;
             sfx_play(SFX_GEM_COLLECT);
         }
@@ -96,8 +217,7 @@ void collision_check_all(GameData *gd)
                 case 4: p->shoot_cooldown = 0; break; /* rapid fire brief burst */
             }
             pc->active = FALSE;
-            SPR_releaseSprite(pc->spr);
-            pc->spr = NULL;
+            if (pc->spr) { SPR_releaseSprite(pc->spr); pc->spr = NULL; }
             sfx_play(SFX_POWERUP);
         }
     }
@@ -114,8 +234,7 @@ void collision_check_all(GameData *gd)
             if (rects_overlap(b->x, b->y, 6, 6, e->x, e->y, 12, 12))
             {
                 b->active = FALSE;
-                SPR_releaseSprite(b->spr);
-                b->spr = NULL;
+                if (b->spr) { SPR_releaseSprite(b->spr); b->spr = NULL; }
                 e->hp--;
                 if (e->hp <= 0)
                     enemy_die(e, gd);
@@ -133,7 +252,7 @@ void collision_check_all(GameData *gd)
                                     fix16Div(fix16Mul(dy, spd), dist), FALSE);
                     }
                 }
-                break;
+                break;   /* one bullet hits one enemy per iteration */
             }
         }
     }
@@ -146,9 +265,9 @@ void collision_check_all(GameData *gd)
         if (rects_overlap(b->x, b->y, 6, 6, p->x, p->y, 10, 10))
         {
             b->active = FALSE;
-            SPR_releaseSprite(b->spr);
-            b->spr = NULL;
+            if (b->spr) { SPR_releaseSprite(b->spr); b->spr = NULL; }
             player_die(p, gd);
+            return;
         }
     }
 }
@@ -226,8 +345,7 @@ void bullets_update(GameData *gd)
         if (bx < 0 || bx >= SCREEN_W || by < HUD_HEIGHT || by >= SCREEN_H)
         {
             b->active = FALSE;
-            SPR_releaseSprite(b->spr);
-            b->spr = NULL;
+            if (b->spr) { SPR_releaseSprite(b->spr); b->spr = NULL; }
             continue;
         }
         /* Destroy if hits wall tile */
@@ -237,8 +355,7 @@ void bullets_update(GameData *gd)
             if (tilemap_is_solid(gd, btx, bty))
             {
                 b->active = FALSE;
-                SPR_releaseSprite(b->spr);
-                b->spr = NULL;
+                if (b->spr) { SPR_releaseSprite(b->spr); b->spr = NULL; }
                 continue;
             }
         }
@@ -297,8 +414,7 @@ void smartbomb_activate(GameData *gd)
         if (b->active && !b->is_player)
         {
             b->active = FALSE;
-            SPR_releaseSprite(b->spr);
-            b->spr = NULL;
+            if (b->spr) { SPR_releaseSprite(b->spr); b->spr = NULL; }
         }
     }
 
@@ -314,86 +430,226 @@ void smartbomb_activate(GameData *gd)
  * ============================================================ */
 void level_generate(GameData *gd, u16 level_num)
 {
+    /* Look up level data (clamp to table, then cycle 1-based) */
+    u16 li = (level_num > 0) ? ((level_num - 1) % MAX_LEVEL_DATA) : 0;
+    const LevelDef *ld = &g_levels[li];
+
     /* Clear tilemap - all floor */
     memset(gd->tilemap, 0, sizeof(gd->tilemap));
 
     /* Generate wall border */
     for (u8 x = 0; x < MAP_TILES_W; x++)
     {
-        gd->tilemap[0][x] = 1;
-        gd->tilemap[MAP_TILES_H-1][x] = 1;
+        gd->tilemap[0][x] = TILE_WALL;
+        gd->tilemap[MAP_TILES_H-1][x] = TILE_WALL;
     }
     for (u8 y = 0; y < MAP_TILES_H; y++)
     {
-        gd->tilemap[y][0] = 1;
-        gd->tilemap[y][MAP_TILES_W-1] = 1;
+        gd->tilemap[y][0] = TILE_WALL;
+        gd->tilemap[y][MAP_TILES_W-1] = TILE_WALL;
     }
 
-    /* Random interior walls (more at higher levels) */
-    u8 wall_count = 5 + level_num / 3;
+    /* Random interior walls (count scales with level) */
+    u8 wall_count = 5 + (u8)(level_num / 3);
+    if (wall_count > 20) wall_count = 20;
     for (u8 w = 0; w < wall_count; w++)
     {
-        u8 wx = 1 + random() % (MAP_TILES_W - 2);
-        u8 wy = 1 + random() % (MAP_TILES_H - 2);
-        u8 wlen = 2 + random() % 4;
-        u8 horiz = random() & 1;
+        u8 wx = 1 + (u8)(random() % (MAP_TILES_W - 2));
+        u8 wy = 1 + (u8)(random() % (MAP_TILES_H - 2));
+        u8 wlen = 2 + (u8)(random() % 4);
+        u8 horiz = (u8)(random() & 1);
         for (u8 i = 0; i < wlen; i++)
         {
             u8 tx = horiz ? MIN(wx+i, MAP_TILES_W-2) : wx;
             u8 ty = horiz ? wy : MIN(wy+i, MAP_TILES_H-2);
-            gd->tilemap[ty][tx] = 1;
+            gd->tilemap[ty][tx] = TILE_WALL;
         }
     }
 
     /* Apply difficulty scaling */
     const DifficultySettings *diff = screen_get_difficulty();
-    s16 gem_adj   = diff ? diff->gem_count_add   : 0;
-    s16 enm_adj   = diff ? diff->enemy_count_add : 0;
+    s16 gem_adj = diff ? diff->gem_count_add   : 0;
 
-    /* Gem count scales with level (+ difficulty adjustment) */
-    s16 gem_count_raw = (s16)(8 + MIN(level_num * 2, 24)) + gem_adj;
-    u8 gem_count = (u8)MAX(2, MIN(gem_count_raw, MAX_GEMS));
+    /* Gem count from level table (+ difficulty adjustment) */
+    s16 gem_count_raw = (s16)ld->num_crystals + gem_adj;
+    u8 gem_count = (u8)MAX(2, MIN(gem_count_raw, (s16)MAX_GEMS));
     gems_init(gd, gem_count);
 
-    /* Spawn enemies - count and types scale with level (+ difficulty) */
-    s16 num_enemies_raw = (s16)(4 + (s16)level_num) + enm_adj;
-    u8 num_enemies = (u8)MAX(1, MIN(num_enemies_raw, MAX_ENEMIES));
-    for (u8 i = 0; i < num_enemies; i++)
+    /* Mines from level table */
     {
-        /* Select enemy type based on level */
-        EnemyType type;
-        if      (level_num < 3)  type = ENEMY_GRUNGER;
-        else if (level_num < 6)  type = (random() & 1) ? ENEMY_GRUNGER : ENEMY_ZIPPO;
-        else if (level_num < 10) type = random() % 4;
-        else                     type = random() % ENEMY_TYPE_COUNT;
-
-        fix16 ex, ey;
-        /* Spawn away from player */
-        do {
-            ex = FIX16(16 + random() % (SCREEN_W-32));
-            ey = FIX16(HUD_HEIGHT+16 + random() % (SCREEN_H-HUD_HEIGHT-32));
-        } while (
-            tilemap_is_solid(gd,
-                fix16ToInt(ex) / TILE_W,
-                (fix16ToInt(ey) - HUD_HEIGHT) / TILE_H) ||
-            (fix16Abs(fix16Sub(ex, gd->player.x)) < FIX16(80) &&
-             fix16Abs(fix16Sub(ey, gd->player.y)) < FIX16(80)));
-
-        enemy_spawn(&gd->enemies[i], type, ex, ey);
+        u8 mine_count = ld->num_mines;
+        for (u8 i = 0; i < mine_count && i < MAX_MINES; i++)
+        {
+            fix16 mx, my;
+            u8 attempts = 0;
+            do {
+                mx = FIX16(16 + (s16)(random() % (SCREEN_W - 32)));
+                my = FIX16(HUD_HEIGHT + 16 + (s16)(random() % (SCREEN_H - HUD_HEIGHT - 32)));
+                attempts++;
+            } while (attempts < 30 &&
+                     tilemap_is_solid(gd,
+                         (u8)(fix16ToInt(mx) / TILE_W),
+                         (u8)((fix16ToInt(my) - HUD_HEIGHT) / TILE_H)));
+            mine_place(gd, mx, my);
+        }
     }
 
-    /* Initialise variant enemy palette (pal_enemy2 → PAL2) */
+    /* Spawn initial enemies at level start (remainder trickle in via portals) */
+    {
+        s16 enm_adj = diff ? diff->enemy_count_add : 0;
+        u8 max_on   = (u8)MIN((s16)ld->max_enemies + enm_adj, (s16)MAX_ENEMIES);
+        /* Spawn half of max_enemies immediately; the rest enter through portals */
+        u8 start_count = MAX(1, max_on / 2);
+        u8 spawned = 0;
+        for (u8 i = 0; i < MAX_ENEMIES && spawned < start_count; i++)
+        {
+            if (gd->enemies[i].active) continue;
+
+            /* Weighted random type from this level's prob table */
+            EnemyType type = ENEMY_GRUNGER;
+            {
+                /* Sum weights */
+                u16 total = 0;
+                for (u8 t = 0; t < LEVEL_PROB_COUNT; t++)
+                    total += g_level_probs[li][t];
+                if (total > 0)
+                {
+                    u16 roll = (u16)(random() % total);
+                    u16 acc  = 0;
+                    for (u8 t = 0; t < LEVEL_PROB_COUNT; t++)
+                    {
+                        acc += g_level_probs[li][t];
+                        if (roll < acc) { type = (EnemyType)t; break; }
+                    }
+                }
+            }
+
+            fix16 ex, ey;
+            u8 attempts = 0;
+            do {
+                ex = FIX16(16 + (s16)(random() % (SCREEN_W - 32)));
+                ey = FIX16(HUD_HEIGHT + 16 + (s16)(random() % (SCREEN_H - HUD_HEIGHT - 32)));
+                attempts++;
+            } while (attempts < 30 && (
+                tilemap_is_solid(gd,
+                    (u8)(fix16ToInt(ex) / TILE_W),
+                    (u8)((fix16ToInt(ey) - HUD_HEIGHT) / TILE_H)) ||
+                (fix16Abs(fix16Sub(ex, gd->player.x)) < FIX16(80) &&
+                 fix16Abs(fix16Sub(ey, gd->player.y)) < FIX16(80))));
+
+            enemy_spawn(&gd->enemies[i], type, ex, ey);
+            spawned++;
+        }
+    }
+
+    /* Initialise variant enemy palette */
     ev_init();
 
-    /* Gate starts closed at top-centre */
-    gd->gate_open   = FALSE;
-    gd->level_timer = 0;
+    /* ---- Gate sprite ---- */
+    /* Release old gate sprite if present (level restart) */
+    if (gd->gate_spr)
+    {
+        if (gd->gate_spr) { SPR_releaseSprite(gd->gate_spr); gd->gate_spr = NULL; }
+    }
+    gd->gate_open        = FALSE;
+    gd->gate_anim_frame  = 0;
+    gd->gate_anim_timer  = 0;
+    gd->gate_x           = SCREEN_W / 2;   /* start at horizontal centre */
+    gd->gate_move_dir    = 1;              /* initially moving right */
+    gd->gate_move_accum  = 0;
 
-    /* Redraw the new tilemap to VDP plane B.
-     * On first call this is a no-op since tilemap_init hasn't been called yet;
-     * game_init() calls tilemap_init() + tilemap_draw() explicitly.
-     * On subsequent level-ups, we call directly here. */
-    /* tilemap_draw(gd); */  /* Enabled by level_next() instead */
+    /* Place gate sprite at top-centre, just below HUD */
+    gd->gate_spr = SPR_addSprite(&spr_gate,
+                                 SCREEN_W / 2 - 8,
+                                 HUD_HEIGHT,
+                                 TILE_ATTR(PAL_COLLECT, TRUE, FALSE, FALSE));
+    if (gd->gate_spr)
+    {
+        SPR_setFrame(gd->gate_spr, 0);   /* frame 0 = closed */
+        SPR_setVisibility(gd->gate_spr, VISIBLE);
+    }
+
+    /* ---- Portal sprites ---- */
+    /* Release old portal sprites if present */
+    if (gd->portal_left_spr)
+    {
+        if (gd->portal_left_spr) { SPR_releaseSprite(gd->portal_left_spr); gd->portal_left_spr = NULL; }
+    }
+    if (gd->portal_right_spr)
+    {
+        if (gd->portal_right_spr) { SPR_releaseSprite(gd->portal_right_spr); gd->portal_right_spr = NULL; }
+    }
+
+    /* Left portal: anchored at x=0, vertically centred on screen midpoint.
+     * The sprite is 16 wide × 24 tall; its left edge lines up with x=0.
+     * PORTAL_Y is the vertical midpoint pixel — offset by half sprite height. */
+    gd->portal_left_spr = SPR_addSprite(&spr_portal,
+                                        0,
+                                        PORTAL_Y - 12,
+                                        TILE_ATTR(PAL_ACTIVE, TRUE, FALSE, FALSE));
+    if (gd->portal_left_spr)
+    {
+        SPR_setFrame(gd->portal_left_spr, 0);     /* frame 0 = closed */
+        SPR_setVisibility(gd->portal_left_spr, VISIBLE);
+    }
+
+    /* Right portal: mirror of left, placed at right edge.
+     * Flip horizontally so the opening faces inward. */
+    gd->portal_right_spr = SPR_addSprite(&spr_portal,
+                                         SCREEN_W - 16,
+                                         PORTAL_Y - 12,
+                                         TILE_ATTR(PAL_ACTIVE, TRUE, FALSE, FALSE));
+    if (gd->portal_right_spr)
+    {
+        SPR_setFrame(gd->portal_right_spr, 0);
+        SPR_setHFlip(gd->portal_right_spr, TRUE);  /* mirror to face inward */
+        SPR_setVisibility(gd->portal_right_spr, VISIBLE);
+    }
+
+    /* ---- Portal state ---- */
+    gd->portal_left_cd    = -1;   /* -1 = idle */
+    gd->portal_right_cd   = -1;
+    gd->portal_left_type  = ENEMY_GRUNGER;
+    gd->portal_right_type = ENEMY_GRUNGER;
+
+    gd->level_timer = 0;
+}
+
+/* ============================================================
+ * PORTAL HELPER: pick a weighted random enemy type for this level
+ * ============================================================ */
+static EnemyType portal_pick_type(u16 level_num)
+{
+    u16 li = (level_num > 0) ? ((level_num - 1) % MAX_LEVEL_DATA) : 0;
+    u16 total = 0;
+    for (u8 t = 0; t < LEVEL_PROB_COUNT; t++)
+        total += g_level_probs[li][t];
+    if (total == 0) return ENEMY_GRUNGER;
+    u16 roll = (u16)(random() % total);
+    u16 acc  = 0;
+    for (u8 t = 0; t < LEVEL_PROB_COUNT; t++)
+    {
+        acc += g_level_probs[li][t];
+        if (roll < acc) return (EnemyType)t;
+    }
+    return ENEMY_GRUNGER;
+}
+
+/* Count active enemies on screen */
+static u8 count_active_enemies(const GameData *gd)
+{
+    u8 n = 0;
+    for (u8 i = 0; i < MAX_ENEMIES; i++)
+        if (gd->enemies[i].active) n++;
+    return n;
+}
+
+/* Find a free enemy slot */
+static s8 find_free_enemy(const GameData *gd)
+{
+    for (u8 i = 0; i < MAX_ENEMIES; i++)
+        if (!gd->enemies[i].active) return (s8)i;
+    return -1;
 }
 
 void level_check_complete(GameData *gd)
@@ -401,35 +657,248 @@ void level_check_complete(GameData *gd)
     /* Level timer increments every frame */
     gd->level_timer++;
 
-    /* Step 1: Open gate when all gems collected */
-    if (gd->gems_remaining == 0 && !gd->gate_open)
+    /* ---- Time-based game speed ramp ---- 
+     * Original: once TimeOnLevel exceeds par * FrameRate, speed increases by
+     * BaseGameSpeed every 32 seconds: +BaseGameSpeed/32 per extra second.
+     * We scale g_game_speed (FIX16(1) = normal) upward continuously. */
     {
-        gd->gate_open = TRUE;
-        sfx_play(SFX_GATE_OPEN);
+        u16 li = (gd->level > 0) ? ((gd->level - 1) % MAX_LEVEL_DATA) : 0;
+        u32 par_frames = (u32)g_levels[li].time_par * 60u;
+        if (gd->level_timer > par_frames)
+        {
+            /* Add FIX16(1)/(32*60) = ~FIX16(0.00052) per frame over par */
+            u32 over = gd->level_timer - par_frames;
+            /* ramp: +1.0 per 1920 frames (32 seconds) → FIX16(1)/1920 per frame */
+            fix16 ramp = FIX16_FROM_FRAC(1, 1920);
+            (void)over;   /* applied incrementally each frame */
+            g_game_speed = fix16Add(g_game_speed, ramp);
+            /* Cap at 3× normal speed */
+            if (g_game_speed > FIX16(3)) g_game_speed = FIX16(3);
+        }
     }
 
-    /* Step 2: If gate is open, check if player has reached it.
-     * Gate is at top-centre of the screen (tile 10, row 0). */
-    if (gd->gate_open && gd->player.active)
+    /* ---- Gate animation ---- */
+    if (!gd->gate_open && gd->gems_remaining == 0)
     {
-        fix16 gate_x = FIX16(SCREEN_W / 2);
-        fix16 gate_y = FIX16(HUD_HEIGHT + 8);   /* just below HUD */
+        /* All gems collected: start opening animation */
+        gd->gate_open = TRUE;
+        gd->gate_anim_frame = 0;
+        gd->gate_anim_timer = 0;
+        sfx_play(SFX_GATE_OPEN);
+        /* Restore PAL2 to gem/gate colours (was overridden by variant enemy palette) */
+        ev_restore_collect_palette();
+    }
 
-        fix16 dx = fix16Abs(fix16Sub(gd->player.x, gate_x));
+    if (gd->gate_open && gd->gate_spr)
+    {
+        /* Advance gate open animation (9 frames, one step every 4 game frames) */
+        gd->gate_anim_timer++;
+        if (gd->gate_anim_timer >= 4)
+        {
+            gd->gate_anim_timer = 0;
+            if (gd->gate_anim_frame < 8)
+            {
+                gd->gate_anim_frame++;
+                SPR_setFrame(gd->gate_spr, gd->gate_anim_frame);
+            }
+        }
+    }
+
+    /* ---- Moving gate (levels 33+) ----
+     * Original: GateMove is a fixed-point increment added to GateMoveCount
+     * each frame; when count exceeds 63 the gate moves 1 pixel.
+     * We replicate this with an 8:8 accumulator:
+     *   gate_move_accum += gate_move (from level table)
+     *   when accum >= 64, shift gate_x by 1 pixel
+     * Gate bounces between x=20 and x=SCREEN_W-20. */
+    if (gd->gate_spr)
+    {
+        u16 li = (gd->level > 0) ? ((gd->level - 1) % MAX_LEVEL_DATA) : 0;
+        u8 gate_move = g_levels[li].gate_move;
+
+        if (gate_move > 0)
+        {
+            gd->gate_move_accum += gate_move;
+            while (gd->gate_move_accum >= 64)
+            {
+                gd->gate_move_accum -= 64;
+                gd->gate_x += gd->gate_move_dir;
+
+                /* Bounce at screen edges (original: MinGateX=20, MaxGateX=PageWidth-30) */
+                if (gd->gate_x >= SCREEN_W - 20)
+                {
+                    gd->gate_x = SCREEN_W - 20;
+                    gd->gate_move_dir = -1;
+                    /* Occasional random direction flip (original GateChangeDirProb) */
+                }
+                else if (gd->gate_x <= 20)
+                {
+                    gd->gate_x = 20;
+                    gd->gate_move_dir = 1;
+                }
+            }
+
+            /* Apply GateChangeDirProb: small random chance to reverse */
+            /* Original: random < GateChangeDirProb per frame.
+             * Levels 41+ have this; we map it as: if accum==0 roll 1/2048. */
+            if ((random() & 0x7FF) == 0)
+                gd->gate_move_dir = -gd->gate_move_dir;
+        }
+
+        /* Update sprite position every frame */
+        SPR_setPosition(gd->gate_spr, gd->gate_x - 8, HUD_HEIGHT);
+    }
+
+    /* Check if player has flown through the open gate (fully open = frame 8) */
+    if (gd->gate_open && gd->gate_anim_frame >= 8 && gd->player.active)
+    {
+        fix16 gate_x_f = FIX16(gd->gate_x);
+        fix16 gate_y   = FIX16(HUD_HEIGHT + 8);
+
+        fix16 dx = fix16Abs(fix16Sub(gd->player.x, gate_x_f));
         fix16 dy = fix16Abs(fix16Sub(gd->player.y, gate_y));
 
         if (dx < FIX16(24) && dy < FIX16(24))
         {
-            /* Time bonus: up to 5000 pts for fast completion */
-            u32 time_bonus = 0;
-            if (gd->level_timer < 1800u)   /* < 30 seconds at 60fps */
-                time_bonus = 5000u - (gd->level_timer * 5u / 3u);
+            /* Time bonus: 500 pts per second under par, capped at 5000 */
+            u16 li = (gd->level > 0) ? ((gd->level - 1) % MAX_LEVEL_DATA) : 0;
+            u32 par_frames  = (u32)g_levels[li].time_par * 60u;
+            u32 time_bonus  = 0;
+            if (gd->level_timer < par_frames)
+            {
+                u32 secs_under = (par_frames - gd->level_timer) / 60u;
+                time_bonus = secs_under * 500u;
+                if (time_bonus > 5000u) time_bonus = 5000u;
+            }
             gd->player.score += time_bonus;
-
             sfx_play(SFX_LEVEL_CLEAR);
-
-            /* Advance to next level */
             level_next(gd);
+            return;   /* gd is now reset; don't touch it further this frame */
+        }
+    }
+
+    /* ---- Continuous enemy spawning via side portals ---- */
+    {
+        u16 li       = (gd->level > 0) ? ((gd->level - 1) % MAX_LEVEL_DATA) : 0;
+        const LevelDef *ld = &g_levels[li];
+        const DifficultySettings *diff = screen_get_difficulty();
+        s16 enm_adj  = diff ? diff->enemy_count_add : 0;
+        u8  max_on   = (u8)MIN((s16)ld->max_enemies + enm_adj, (s16)MAX_ENEMIES);
+        u8  on_screen = count_active_enemies(gd);
+
+        /* Try to trigger a new portal if below max and neither is busy.
+         * Roll against erelease_prob per frame, scaled by difficulty. */
+        if (on_screen < max_on)
+        {
+            u32 roll_limit = (u32)ld->erelease_prob;
+            if (diff && diff->enemy_count_add > 0)
+                roll_limit = roll_limit * 12 / 10;   /* +20% on harder */
+
+            /* Random 0..65535 check */
+            u32 roll = (u32)(random() & 0xFFFF);
+            if (roll < roll_limit)
+            {
+                EnemyType etype = portal_pick_type(gd->level);
+
+                /* Pick left or right portal, preferring idle one */
+                if (gd->portal_left_cd < 0 && (gd->portal_right_cd >= 0 || (random() & 1)))
+                {
+                    gd->portal_left_cd   = PORTAL_ANIM_FRAMES;
+                    gd->portal_left_type = (u8)etype;
+                }
+                else if (gd->portal_right_cd < 0)
+                {
+                    gd->portal_right_cd   = PORTAL_ANIM_FRAMES;
+                    gd->portal_right_type = (u8)etype;
+                }
+            }
+        }
+
+        /* ---- Animate and resolve LEFT portal ---- */
+        if (gd->portal_left_cd >= 0)
+        {
+            gd->portal_left_cd--;
+
+            /* Map countdown to animation frame (0=closed → 4=open).
+             * The portal opens during the first half of the countdown,
+             * then stays open until the enemy enters at cd==0. */
+            u8 anim_step;
+            s16 cd = gd->portal_left_cd;
+            if (cd >= PORTAL_ANIM_FRAMES / 2)
+            {
+                /* Opening: map [FRAMES..FRAMES/2] → [0..PORTAL_ANIM_STEPS-1] */
+                u16 elapsed = (u16)(PORTAL_ANIM_FRAMES - cd);
+                anim_step = (u8)(elapsed * PORTAL_ANIM_STEPS / (PORTAL_ANIM_FRAMES / 2));
+                if (anim_step >= PORTAL_ANIM_STEPS) anim_step = PORTAL_ANIM_STEPS - 1;
+            }
+            else
+            {
+                /* Fully open while enemy is "inside" the portal */
+                anim_step = PORTAL_ANIM_STEPS - 1;
+            }
+            if (gd->portal_left_spr)
+                SPR_setFrame(gd->portal_left_spr, anim_step);
+
+            if (gd->portal_left_cd == 0)
+            {
+                /* Enemy enters — reset portal to closed */
+                if (gd->portal_left_spr)
+                    SPR_setFrame(gd->portal_left_spr, 0);
+
+                s8 slot = find_free_enemy(gd);
+                if (slot >= 0)
+                {
+                    enemy_spawn(&gd->enemies[(u8)slot],
+                                (EnemyType)gd->portal_left_type,
+                                FIX16(PORTAL_LEFT_X + 8),
+                                FIX16(PORTAL_Y));
+                    /* Give initial rightward velocity */
+                    gd->enemies[(u8)slot].vx = FIX16(1.0);
+                    sfx_play(SFX_ENEMY_ENTER);
+                }
+                gd->portal_left_cd = -1;
+            }
+        }
+
+        /* ---- Animate and resolve RIGHT portal ---- */
+        if (gd->portal_right_cd >= 0)
+        {
+            gd->portal_right_cd--;
+
+            u8 anim_step;
+            s16 cd = gd->portal_right_cd;
+            if (cd >= PORTAL_ANIM_FRAMES / 2)
+            {
+                u16 elapsed = (u16)(PORTAL_ANIM_FRAMES - cd);
+                anim_step = (u8)(elapsed * PORTAL_ANIM_STEPS / (PORTAL_ANIM_FRAMES / 2));
+                if (anim_step >= PORTAL_ANIM_STEPS) anim_step = PORTAL_ANIM_STEPS - 1;
+            }
+            else
+            {
+                anim_step = PORTAL_ANIM_STEPS - 1;
+            }
+            if (gd->portal_right_spr)
+                SPR_setFrame(gd->portal_right_spr, anim_step);
+
+            if (gd->portal_right_cd == 0)
+            {
+                /* Enemy enters — reset portal to closed */
+                if (gd->portal_right_spr)
+                    SPR_setFrame(gd->portal_right_spr, 0);
+
+                s8 slot = find_free_enemy(gd);
+                if (slot >= 0)
+                {
+                    enemy_spawn(&gd->enemies[(u8)slot],
+                                (EnemyType)gd->portal_right_type,
+                                FIX16(PORTAL_RIGHT_X - 8),
+                                FIX16(PORTAL_Y));
+                    /* Give initial leftward velocity */
+                    gd->enemies[(u8)slot].vx = FIX16(-1.0);
+                    sfx_play(SFX_ENEMY_ENTER);
+                }
+                gd->portal_right_cd = -1;
+            }
         }
     }
 }
@@ -585,6 +1054,15 @@ void level_next(GameData *gd)
 {
     gd->level++;
 
+    /* Reset time-based speed ramp for the new level */
+    g_game_speed = FIX16(1);
+
+    /* SPR_reset() releases ALL sprites. Null our tracked pointers first so
+     * level_generate() doesn't attempt a double-release. */
+    gd->gate_spr         = NULL;
+    gd->portal_left_spr  = NULL;
+    gd->portal_right_spr = NULL;
+
     /* Clear all active entities */
     SPR_reset();
 
@@ -593,12 +1071,17 @@ void level_next(GameData *gd)
                 FIX16(SCREEN_W / 2),
                 FIX16(SCREEN_H / 2));
 
-    /* Generate new level layout */
+    /* Also null enemy/mine/gem/bullet sprite handles — SPR_reset freed them */
+    for (u8 i = 0; i < MAX_ENEMIES;    i++) { gd->enemies[i].active = FALSE;    gd->enemies[i].spr    = NULL; }
+    for (u8 i = 0; i < MAX_BULLETS;    i++) { gd->bullets[i].active = FALSE;    gd->bullets[i].spr    = NULL; }
+    for (u8 i = 0; i < MAX_GEMS;       i++) { gd->gems[i].active    = FALSE;    gd->gems[i].spr       = NULL; }
+    for (u8 i = 0; i < MAX_MINES;      i++) { gd->mines[i].active   = FALSE;    gd->mines[i].spr      = NULL; }
+    for (u8 i = 0; i < MAX_EXPLOSIONS; i++) { gd->explosions[i].active = FALSE; gd->explosions[i].spr = NULL; }
+    for (u8 i = 0; i < MAX_POWERCHARGES; i++) { gd->powercharges[i].active = FALSE; gd->powercharges[i].spr = NULL; }
+
+    /* Generate new level layout (also creates gate_spr and resets portals) */
     level_generate(gd, gd->level);
 
     /* Redraw background */
     tilemap_draw(gd);
-
-    /* Refresh HUD */
-    /* hud_draw(gd); */   /* called from game_run each frame */
 }

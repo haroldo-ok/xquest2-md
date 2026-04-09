@@ -63,6 +63,7 @@ extern const SpriteDefinition spr_ship_diag;
 extern const SpriteDefinition spr_gem;
 extern const SpriteDefinition spr_mine;
 extern const SpriteDefinition spr_gate;
+extern const SpriteDefinition spr_portal;       /* enemy spawn portal (5 frames) */
 extern const SpriteDefinition spr_powercharge;
 extern const SpriteDefinition spr_smartbomb;
 extern const SpriteDefinition spr_explosion;
@@ -116,10 +117,55 @@ extern const u8 sfx_8[];  extern u32 sfx_8_size;
 #define FIX16_FROM_FRAC(num, den)   ((fix16)((s32)(num) * 65536L / (den)))
 
 /* ============================================================
+ * ENEMY SPAWN PORTAL CONSTANTS
+ * ============================================================ */
+/* Portal animation length (frames).  Enemy enters at countdown == 0. */
+#define PORTAL_ANIM_FRAMES   80
+/* Number of animation steps drawn (1 frame image per step) */
+#define PORTAL_ANIM_STEPS     5
+/* Horizontal X position of the two portals (pixel centres) */
+#define PORTAL_LEFT_X        10
+#define PORTAL_RIGHT_X      (SCREEN_W - 10)
+/* Vertical Y position of portals (screen vertical midpoint) */
+#define PORTAL_Y            ((HUD_HEIGHT + SCREEN_H) / 2)
+
+/* ============================================================
+ * LEVEL DEFINITIONS  (mirrored from original xqvars.pas)
+ * Max 50 levels; values beyond MAX_LEVEL_DATA cycle from level 1.
+ * ============================================================ */
+#define MAX_LEVEL_DATA   50
+
+typedef struct {
+    u8   num_crystals;   /* gems to collect */
+    u8   num_mines;
+    u8   max_enemies;    /* max simultaneous on-screen */
+    u16  erelease_prob;  /* spawn probability × 65536 per frame per type */
+                         /* (original float × 65535, clamped to u16)      */
+    u16  gate_width;     /* width of the exit gap in pixels (unused in    */
+                         /* tile-based port but kept for future use)       */
+    u8   gate_move;      /* 0=static gate, >0=moving gate speed           */
+    u16  time_par;       /* par time in seconds for bonus                 */
+    u32  newman_score;   /* score threshold for extra life                */
+} LevelDef;
+
+/* Per-level enemy type probability weights [0..ENEMY_TYPE_COUNT-1].
+ * Index maps to EnemyType enum.  Sum need not equal 100.
+ * Derived from original xqvars.pas probs[][] table (index 0=supercrystal
+ * skipped; index 1=explosion skipped; real enemies start at index 2).
+ * We store only the 15 enemy types matching EnemyType enum order. */
+#define LEVEL_PROB_COUNT   15   /* == ENEMY_TYPE_COUNT */
+extern const u8 g_level_probs[MAX_LEVEL_DATA][LEVEL_PROB_COUNT];
+extern const LevelDef g_levels[MAX_LEVEL_DATA];
+
+/* ============================================================
  * GLOBAL FRAME COUNTER
  * Incremented once per frame in main.c game_run().
  * ============================================================ */
 extern u32 g_frame_count;
+
+/* Game speed scalar (fix16).  FIX16(1) = normal.  Increases when the player
+ * exceeds the level par time, matching the original speed-ramp mechanic. */
+extern fix16 g_game_speed;
 
 /* ============================================================
  * 8-DIRECTION VELOCITY TABLES
@@ -195,6 +241,13 @@ typedef struct {
     u16   anim_timer;
     u16   ai_timer;        /* general-purpose AI state counter */
     u8    ai_state;
+    /* Curved motion (Meeby / moth enemies): rotation matrix components.
+     * Stored as signed fixed-point ×32767.  0 = no curve. */
+    s16   curvesin;        /* sin component of curve rotation */
+    s16   curvecos;        /* cos component (32767 = 1.0)     */
+    /* Per-enemy speed scale applied at spawn from difficulty settings.
+     * 100 = 100% = normal speed. Stored here so AI functions can use it. */
+    u8    speed_scale;     /* difficulty speed % (default 100) */
     Sprite *spr;
 } Enemy;
 
@@ -246,9 +299,26 @@ typedef struct {
     u16  level;
     u8   gems_remaining;
     u8   gate_open;
+    u8   gate_anim_frame;    /* current frame of gate open animation (0-8) */
+    u8   gate_anim_timer;    /* frames since last gate anim step */
+    Sprite *gate_spr;        /* gate sprite (NULL until level init) */
+    /* Moving gate (levels 33+): gate slides left/right when gate_move > 0 */
+    s16  gate_x;             /* current pixel X of gate centre */
+    s16  gate_move_dir;      /* +1 = moving right, -1 = moving left */
+    u16  gate_move_accum;    /* sub-pixel accumulator (fixed-point 8:8) */
     u16  level_timer;
     u8   difficulty;       /* 0=easy, 1=normal, 2=hard, 3=insane */
     GameState state;
+
+    /* Enemy spawn portals (left and right side inlets).
+     * countdown > 0 means a portal is animating open/closed.
+     * At countdown==0 the enemy enters. enemy_type holds the type queued. */
+    s16  portal_left_cd;    /* countdown frames (80..0) */
+    s16  portal_right_cd;
+    u8   portal_left_type;
+    u8   portal_right_type;
+    Sprite *portal_left_spr;   /* left wall portal sprite  */
+    Sprite *portal_right_spr;  /* right wall portal sprite */
 
     /* Tile map */
     u8   tilemap[MAP_TILES_H][MAP_TILES_W];   /* 0=floor, 1=wall */

@@ -6,8 +6,78 @@
 
 #include <genesis.h>
 #include "xquest.h"
+#include "tilemap.h"
 #include "sfx.h"
 #include "resources.h"
+
+/* ============================================================
+ * WALL COLLISION HELPERS
+ *
+ * We test the four corners of the ship's 10x10 hitbox
+ * (centred on p->x, p->y) against the tile map.
+ * On contact: bounce velocity component and push out of wall.
+ * On Easy difficulty (DiffLevel 0): rebound instead of die.
+ * All other difficulties: die on wall contact.
+ * ============================================================ */
+#define HALF_HIT  5   /* half of SHIP_HIT_W / SHIP_HIT_H */
+
+/* Return TRUE if pixel (px,py) is inside a solid tile */
+static u8 pixel_solid(const GameData *gd, s16 px, s16 py)
+{
+    if (px < 0 || px >= SCREEN_W || py < HUD_HEIGHT || py >= SCREEN_H)
+        return TRUE;   /* treat off-screen as solid */
+    u8 tx, ty;
+    tilemap_cell_at_pixel(px, py, &tx, &ty);
+    return tilemap_is_solid(gd, tx, ty);
+}
+
+static void player_wall_collide(Player *p, GameData *gd)
+{
+    s16 px = fix16ToInt(p->x);
+    s16 py = fix16ToInt(p->y);
+
+    /* Test left / right edges */
+    u8 hit_l = pixel_solid(gd, px - HALF_HIT, py) ||
+               pixel_solid(gd, px - HALF_HIT, py - HALF_HIT) ||
+               pixel_solid(gd, px - HALF_HIT, py + HALF_HIT);
+    u8 hit_r = pixel_solid(gd, px + HALF_HIT, py) ||
+               pixel_solid(gd, px + HALF_HIT, py - HALF_HIT) ||
+               pixel_solid(gd, px + HALF_HIT, py + HALF_HIT);
+
+    /* Test top / bottom edges */
+    u8 hit_t = pixel_solid(gd, px, py - HALF_HIT) ||
+               pixel_solid(gd, px - HALF_HIT, py - HALF_HIT) ||
+               pixel_solid(gd, px + HALF_HIT, py - HALF_HIT);
+    u8 hit_b = pixel_solid(gd, px, py + HALF_HIT) ||
+               pixel_solid(gd, px - HALF_HIT, py + HALF_HIT) ||
+               pixel_solid(gd, px + HALF_HIT, py + HALF_HIT);
+
+    if (!hit_l && !hit_r && !hit_t && !hit_b) return;
+
+    /* Easy difficulty: rebound (same as original Wimp/Timid with Shield) */
+    u8 diff = gd->difficulty;
+    if (diff == 0)
+    {
+        if (hit_l || hit_r)
+        {
+            p->vx = hit_l ? fix16Abs(p->vx) : -fix16Abs(p->vx);
+            /* Push out */
+            if (hit_l) p->x = fix16Add(p->x, FIX16(2));
+            else       p->x = fix16Sub(p->x, FIX16(2));
+        }
+        if (hit_t || hit_b)
+        {
+            p->vy = hit_t ? fix16Abs(p->vy) : -fix16Abs(p->vy);
+            if (hit_t) p->y = fix16Add(p->y, FIX16(2));
+            else       p->y = fix16Sub(p->y, FIX16(2));
+        }
+    }
+    else
+    {
+        /* Normal+ difficulty: die on wall contact */
+        player_die(p, gd);
+    }
+}
 
 /* Ship hitbox (centred on sprite) */
 #define SHIP_HIT_W    10
@@ -114,6 +184,10 @@ void player_update(Player *p, GameData *gd)
     if (fix16ToInt(p->x) >= SCREEN_W)  p->x = FIX16(0);
     if (fix16ToInt(p->y) < HUD_HEIGHT) p->y = FIX16(SCREEN_H - 1);
     if (fix16ToInt(p->y) >= SCREEN_H)  p->y = FIX16(HUD_HEIGHT);
+
+    /* Wall / background collision */
+    if (p->active && p->invincible == 0)
+        player_wall_collide(p, gd);
 
     /* --- Firing (Button A or C) --- */
     if (p->shoot_cooldown > 0)

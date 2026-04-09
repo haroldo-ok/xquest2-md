@@ -17,6 +17,7 @@
 GameData gd;           /* global (accessed by screens.c pause quit) */
 u32 g_frame_count;     /* global frame counter, used by AI in enemy.c */
 u8 g_two_player = FALSE;   /* defined here, declared extern in player2.h */
+fix16 g_game_speed = FIX16(1);  /* game speed scalar, reset each level */
 
 /* ============================================================
  * FORWARD DECLARATIONS
@@ -100,6 +101,14 @@ void game_init(void)
 {
     /* Zero the game state */
     memset(&gd, 0, sizeof(GameData));
+
+    /* Portal idle sentinel: -1 means no portal animation running.
+     * memset gives 0 which would immediately trigger — set explicitly. */
+    gd.portal_left_cd  = -1;
+    gd.portal_right_cd = -1;
+
+    /* Reset game speed ramp */
+    g_game_speed = FIX16(1);
 
     /* Initial player positions */
     player_init(&gd.player,

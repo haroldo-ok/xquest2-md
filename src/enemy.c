@@ -22,6 +22,8 @@
 
 #include <genesis.h>
 #include "xquest.h"
+#include "tilemap.h"
+#include "screens.h"
 #include "sfx.h"
 #include "enemy_variants.h"
 #include "resources.h"
@@ -102,6 +104,15 @@ static const SpriteDefinition *ENEMY_SPR[ENEMY_TYPE_COUNT] = {
     &spr_meeby,      /* REPULSOR (large, forceful) */
 };
 
+/* Return speed adjusted for difficulty and game speed ramp */
+static fix16 scaled_speed(const Enemy *e, fix16 base_speed)
+{
+    /* difficulty scale: enemy speed_scale is a percentage (100 = normal) */
+    fix16 s = fix16Div(fix16Mul(base_speed, FIX16(e->speed_scale)), FIX16(100));
+    /* game speed ramp (g_game_speed = FIX16(1) normally, >1 when over par) */
+    return fix16Mul(s, g_game_speed);
+}
+
 /* ============================================================
  * UTILITY: Move toward target with speed
  * ============================================================ */
@@ -111,6 +122,7 @@ static void move_toward(Enemy *e, fix16 tx, fix16 ty, fix16 speed)
     fix16 dy = fix16Sub(ty, e->y);
     fix16 dist = fix16Add(fix16Abs(dx), fix16Abs(dy));   /* Manhattan approx */
     if (dist < FIX16(1)) return;
+    speed = scaled_speed(e, speed);
     e->vx = fix16Div(fix16Mul(dx, speed), dist);
     e->vy = fix16Div(fix16Mul(dy, speed), dist);
 }
@@ -143,6 +155,30 @@ void enemy_spawn(Enemy *e, EnemyType type, fix16 x, fix16 y)
     e->ai_state = 0;
     e->ai_timer = 0;
 
+    /* Apply difficulty speed scale (screens.h declares screen_get_difficulty) */
+    {
+        const DifficultySettings *diff = screen_get_difficulty();
+        e->speed_scale = diff ? (u8)diff->enemy_spd_scale : 100;
+    }
+
+    /* Initialise curve components.
+     * Meeby and Sticktight move in arcs (original: 'curves' flag true).
+     * Others use identity rotation (no curve). */
+    if (type == ENEMY_MEEBY || type == ENEMY_STICKTIGHT)
+    {
+        /* Small random rotation: ±(0..410) Q15 ≈ ±0.7° per frame */
+        s16 cs = (s16)((s32)(random() % 820) - 410);
+        s32 cs32 = (s32)cs * cs;
+        s32 cc32 = 32767L - cs32 / 32767L;
+        e->curvesin = cs;
+        e->curvecos = (s16)(cc32 < 1000L ? 1000L : cc32);
+    }
+    else
+    {
+        e->curvesin = 0;
+        e->curvecos = 32767;   /* identity */
+    }
+
     e->spr = SPR_addSprite(ENEMY_SPR[type],
                            fix16ToInt(x) - 8,
                            fix16ToInt(y) - 8,
@@ -164,12 +200,15 @@ void enemy_spawn(Enemy *e, EnemyType type, fix16 x, fix16 y)
  * ============================================================ */
 static void ai_grunger(Enemy *e, GameData *gd)
 {
-    /* Slow random walk toward player */
+    /* Slow random walk toward player; changes direction every ~30 frames */
     e->ai_timer++;
     if (e->ai_timer >= 30)
     {
         e->ai_timer = 0;
         move_toward(e, gd->player.x, gd->player.y, ENEMY_SPEED[ENEMY_GRUNGER]);
+        /* Small random perturbation so they don't all stack perfectly */
+        e->vx = fix16Add(e->vx, FIX16_FROM_FRAC((s16)(random() % 40) - 20, 100));
+        e->vy = fix16Add(e->vy, FIX16_FROM_FRAC((s16)(random() % 40) - 20, 100));
     }
 }
 
@@ -227,14 +266,50 @@ static void ai_miner(Enemy *e, GameData *gd)
 
 static void ai_meeby(Enemy *e, GameData *gd)
 {
-    /* Large, slow, tough - charges player periodically */
+    /* Large, slow, tough.
+     * Original: moves in arcs (curves=TRUE) with periodic charge.
+     * curvesin/curvecos rotate the velocity vector each frame, producing
+     * the distinctive "moth" arc path.  Every ~90 frames the curve
+     * direction flips randomly (changecurve) and a charge occurs. */
     e->ai_timer++;
-    if (e->ai_timer < 60)
-        move_toward(e, gd->player.x, gd->player.y, FIX16(0.4));
-    else if (e->ai_timer < 90)
-        move_toward(e, gd->player.x, gd->player.y, ENEMY_SPEED[ENEMY_MEEBY] * 2);
-    else
+
+    /* Rotate velocity by the curve matrix every frame */
+    if (e->curvesin != 0)
+    {
+        /* new_vx = vx*cos - vy*sin  (all ×32767) */
+        s32 nvx = ((s32)fix16ToRaw(e->vx) * e->curvecos -
+                   (s32)fix16ToRaw(e->vy) * e->curvesin) >> 15;
+        s32 nvy = ((s32)fix16ToRaw(e->vy) * e->curvecos +
+                   (s32)fix16ToRaw(e->vx) * e->curvesin) >> 15;
+        e->vx = fix16FromRaw((s32)nvx);
+        e->vy = fix16FromRaw((s32)nvy);
+    }
+
+    /* Periodically re-aim and randomise curve */
+    if (e->ai_timer >= 90)
+    {
         e->ai_timer = 0;
+
+        if (e->ai_state == 0)
+        {
+            /* Cruise phase: slow approach with curve */
+            move_toward(e, gd->player.x, gd->player.y, FIX16(0.6));
+            /* Pick a small random arc angle: ±3° (sin ≈ ±1638/32767) */
+            e->curvesin = (s16)(((s16)(random() % 3276) - 1638));
+            /* cos = sqrt(1 - sin²) approx via lookup – use 32700 for small angles */
+            e->curvecos = 32700;
+            e->ai_state = 1;
+        }
+        else
+        {
+            /* Charge phase: fast direct lunge */
+            move_toward(e, gd->player.x, gd->player.y,
+                        scaled_speed(e, FIX16(1.8)));
+            e->curvesin = 0;
+            e->curvecos = 32767;
+            e->ai_state = 0;
+        }
+    }
 }
 
 static void ai_retaliator(Enemy *e, GameData *gd)
@@ -274,18 +349,20 @@ static void ai_terrier(Enemy *e, GameData *gd)
 
 static void ai_doinger(Enemy *e, GameData *gd)
 {
-    /* Gets faster and fires more as ai_timer increases */
-    e->ai_timer++;
-    fix16 speed = fix16Add(ENEMY_SPEED[ENEMY_DOINGER],
-                           FIX16_FROM_FRAC(e->ai_timer, 1000));
-    speed = MIN(speed, FIX16(3.0));
-    move_toward(e, gd->player.x, gd->player.y, speed);
+    /* Gets faster and fires more as ai_timer increases.
+     * Cap ai_timer at 600 so speed and fire rate don't overflow. */
+    if (e->ai_timer < 600) e->ai_timer++;
 
-    /* Fires bullets at intervals that shorten over time */
-    u16 fire_interval = MAX(60 - e->ai_timer / 10, 15);
+    fix16 base_speed = fix16Add(ENEMY_SPEED[ENEMY_DOINGER],
+                                FIX16_FROM_FRAC(e->ai_timer, 300));
+    base_speed = MIN(base_speed, FIX16(3.5));
+    move_toward(e, gd->player.x, gd->player.y, base_speed);
+
+    /* Fire interval shrinks from 60 frames down to 10 as timer grows */
+    u16 fire_interval = (u16)MAX(60 - (s16)(e->ai_timer / 10), 10);
     if ((g_frame_count % fire_interval) == 0)
     {
-        fix16 spd = FIX16(2.0);
+        fix16 spd = FIX16(2.5);
         fix16 dx = fix16Sub(gd->player.x, e->x);
         fix16 dy = fix16Sub(gd->player.y, e->y);
         fix16 dist = fix16Add(fix16Abs(dx), fix16Abs(dy));
@@ -436,15 +513,87 @@ void enemies_update(GameData *gd)
         /* Run AI */
         AI_TABLE[e->type](e, gd);
 
+        /* Apply curved motion: rotate velocity by curvesin/curvecos if set.
+         * This is done after AI so the AI sets the base direction, and the
+         * curve bends it each frame (matching original curvesin/curvecos logic). */
+        if (e->curvesin != 0)
+        {
+            s32 nvx = ((s32)fix16ToRaw(e->vx) * (s32)e->curvecos -
+                       (s32)fix16ToRaw(e->vy) * (s32)e->curvesin) >> 15;
+            s32 nvy = ((s32)fix16ToRaw(e->vy) * (s32)e->curvecos +
+                       (s32)fix16ToRaw(e->vx) * (s32)e->curvesin) >> 15;
+            e->vx = fix16FromRaw(nvx);
+            e->vy = fix16FromRaw(nvy);
+        }
+
         /* Integrate position */
         e->x = fix16Add(e->x, e->vx);
         e->y = fix16Add(e->y, e->vy);
 
-        /* Screen wrap */
-        if (fix16ToInt(e->x) < 0)         e->x = FIX16(SCREEN_W - 1);
-        if (fix16ToInt(e->x) >= SCREEN_W) e->x = FIX16(0);
-        if (fix16ToInt(e->y) < HUD_HEIGHT)e->y = FIX16(SCREEN_H - 1);
-        if (fix16ToInt(e->y) >= SCREEN_H) e->y = FIX16(HUD_HEIGHT);
+        /* Boundary bounce (original: enemies bounce off EnemyXMin/Max/YMin/Max).
+         * Also guard against the vertical enemy-inlet strip at screen midpoint
+         * (x near 0 or SCREEN_W), matching original EnemyEntering guard. */
+        s16 ex = fix16ToInt(e->x);
+        s16 ey = fix16ToInt(e->y);
+
+        /* Left boundary */
+        if (ex < 10)
+        {
+            e->x  = FIX16(10);
+            e->vx = fix16Abs(e->vx);
+        }
+        /* Right boundary */
+        else if (ex > SCREEN_W - 10)
+        {
+            e->x  = FIX16(SCREEN_W - 10);
+            e->vx = -fix16Abs(e->vx);
+        }
+        /* Top boundary (below HUD) */
+        if (ey < HUD_HEIGHT + 10)
+        {
+            e->y  = FIX16(HUD_HEIGHT + 10);
+            e->vy = fix16Abs(e->vy);
+        }
+        /* Bottom boundary */
+        else if (ey > SCREEN_H - 10)
+        {
+            e->y  = FIX16(SCREEN_H - 10);
+            e->vy = -fix16Abs(e->vy);
+        }
+
+        /* Extra guard: don't let enemies wander into the spawn-portal columns
+         * (x < 20 or x > SCREEN_W-20) except at the vertical midpoint row,
+         * matching original "collision with enemy inlets" check. */
+        ex = fix16ToInt(e->x);
+        ey = fix16ToInt(e->y);
+        s16 mid_y = (HUD_HEIGHT + SCREEN_H) / 2;
+        if (ey < mid_y - 10 || ey > mid_y + 10)   /* not at portal row */
+        {
+            if (ex < 20)
+            {
+                e->x  = FIX16(20);
+                e->vx = fix16Abs(e->vx);
+            }
+            else if (ex > SCREEN_W - 20)
+            {
+                e->x  = FIX16(SCREEN_W - 20);
+                e->vx = -fix16Abs(e->vx);
+            }
+        }
+
+        /* Wall tile collision: bounce off solid tiles */
+        {
+            u8 tx, ty;
+            tilemap_cell_at_pixel(fix16ToInt(e->x), fix16ToInt(e->y), &tx, &ty);
+            if (tilemap_is_solid(gd, tx, ty))
+            {
+                /* Push back and reverse relevant velocity */
+                e->x = fix16Sub(e->x, e->vx);
+                e->y = fix16Sub(e->y, e->vy);
+                if (e->vx != 0) e->vx = -e->vx;
+                if (e->vy != 0) e->vy = -e->vy;
+            }
+        }
 
         /* Animation cycle */
         e->anim_timer++;
@@ -479,15 +628,20 @@ void enemy_die(Enemy *e, GameData *gd)
     /* Special death effects */
     if (e->type == ENEMY_TRIBBLER)
     {
-        /* Split into 2 smaller pieces (just spawn 2 more grungers as approximation) */
-        for (u8 i = 0; i < MAX_ENEMIES; i++)
+        /* Original spawns 5 tribbles on death (ntyp+1 = next smaller type,
+         * approximated here as ENEMY_GRUNGER for the fast small splits). */
+        u8 spawned = 0;
+        for (u8 i = 0; i < MAX_ENEMIES && spawned < 5; i++)
         {
             if (!gd->enemies[i].active)
             {
                 enemy_spawn(&gd->enemies[i], ENEMY_GRUNGER,
-                            fix16Add(e->x, FIX16(random() % 20 - 10)),
-                            fix16Add(e->y, FIX16(random() % 20 - 10)));
-                break;
+                            fix16Add(e->x, FIX16((s16)(random() % 24) - 12)),
+                            fix16Add(e->y, FIX16((s16)(random() % 24) - 12)));
+                /* Give each child a random outward velocity */
+                gd->enemies[i].vx = FIX16_FROM_FRAC((s16)(random() % 200) - 100, 50);
+                gd->enemies[i].vy = FIX16_FROM_FRAC((s16)(random() % 200) - 100, 50);
+                spawned++;
             }
         }
     }
@@ -536,8 +690,7 @@ void enemy_die(Enemy *e, GameData *gd)
     sfx_play(SFX_EXPLOSION_SM);
 
     e->active = FALSE;
-    SPR_releaseSprite(e->spr);
-    e->spr = NULL;
+    if (e->spr) { SPR_releaseSprite(e->spr); e->spr = NULL; }
 }
 
 /* ============================================================

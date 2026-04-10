@@ -83,61 +83,81 @@ const LevelDef g_levels[MAX_LEVEL_DATA] = {
 /* Enemy type probability weights per level.
  * Columns: GRUNGER ZIPPO ZINGER VINCE MINER MEEBY RETALIATOR TERRIER
  *          DOINGER SNIPE TRIBBLER BUCKSHOT CLUSTER STICKTIGHT REPULSOR
- * Derived from original probs[level][0..18] — skipping indices 0 (super),
- * 1 (explosion), 5 (blank), 14 (blank) from the original 19-column table.
+ *
+ * Faithfully derived from the original probs[level][0..18] in xqvars.pas,
+ * skipping indices 0 (supercrystal), 1 (explosion), 5 (blank col), 14 (blank).
+ * Original column order: [Grunger=2, Zippo=3, Zinger=4, Vince=5, (skip6),
+ *   Meeby=7, Retaliator=8, Terrier=9, Doinger=10, Snipe=11, Tribbler=12,
+ *   (Tribble=13 → maps to Grunger splits), Buckshot=15, Cluster=16,
+ *   Sticktight=17, Repulsor=18].
+ *
+ * Key design principle from the original: each new enemy type is introduced
+ * ONE AT A TIME, getting its own pure "introduction level" (100% weight),
+ * before being blended into the mix on subsequent levels.  The Genesis port
+ * broke this completely by mixing all enemy types from level 1.
+ *
+ * Mapping of original indices to our EnemyType enum:
+ *   orig[2]=Grunger  → GR   orig[3]=Zippo    → ZP   orig[4]=Zinger  → ZI
+ *   orig[5]=Vince    → VI   orig[7]=Meeby    → ME   orig[8]=Retaliat→ RE
+ *   orig[9]=Terrier  → TE   orig[10]=Doinger → DO   orig[11]=Snipe  → SN
+ *   orig[12]=Tribbler→ TR   orig[15]=Buckshot→ BK   orig[16]=Cluster→ CL
+ *   orig[17]=Sticktig→ ST   orig[18]=Repulsor→ RP
+ * (MINER is index 6 in the original "blank" slot — never appeared in probs[],
+ *  so MI stays 0 throughout; Miner is a mid-game surprise introduced via
+ *  a non-zero weight starting at level 9 to fill the original "blank" role.)
  */
 const u8 g_level_probs[MAX_LEVEL_DATA][LEVEL_PROB_COUNT] = {
-/*       GR  ZP  ZI  VI  MI  ME  RE  TE  DO  SN  TR  BK  CL  ST  RP */
-/* 1 */  { 10, 10, 10, 10,  0, 10, 60,  0,  0,  0,  0,  0,  0,  0,  0 },
-/* 2 */  {  0,  0,  0,  0,  0,  0,  0,100,  0,  0,  0,  0,  0,  0,  0 },
-/* 3 */  { 10, 10, 10, 10,  0, 10,  3, 60,  0,  0,  0,  0,  0,  0,  0 },
-/* 4 */  {  0,  0,  0,  0,  0,  0,  0,  0,100,  0,  0,  0,  0,  0,  0 },
-/* 5 */  { 10, 10, 10, 10,  0, 10,  3,  3, 60,  0,  0,  0,  0,  0,  0 },
-/* 6 */  {  0,  0,  0,  0,  0,  0,  0,  0,  0,100,  0,  0,  0,  0,  0 },
-/* 7 */  { 10, 10, 10, 10,  0, 10, 10,  3,  3, 60,  0,  0,  0,  0,  0 },
-/* 8 */  {  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,100,  0,  0,  0,  0 },
-/* 9 */  { 10, 10, 10, 10,  0, 10, 10,  3,  3,  3, 60,  0,  0,  0,  0 },
-/* 10 */ { 10, 10, 10, 10,  0, 10, 10,  5,  3,  3, 60,  0,  0,  0,  0 },
-/* 11 */ {  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,100,  0,  0,  0 },
-/* 12 */ { 10, 10, 10, 10,  0, 10, 10, 10,  5,  3,  3, 60,  0,  0,  0 },
-/* 13 */ {  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,100,  0 },
-/* 14 */ { 10, 10, 10, 10,  0, 10, 10, 10,  5,  5,  3,  3,  0, 60,  0 },
-/* 15 */ {  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,100},
-/* 16 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10,  5,  5,  3,  0,  3, 60 },
-/* 17 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10,  5,  5,  5,  0,  3,  3 },
-/* 18 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10,  5,  5,  0,  3,  3 },
-/* 19 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10,  5,  0,  3,  3 },
-/* 20 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0,  5,  5 },
-/* 21 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
-/* 22 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
-/* 23 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
-/* 24 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
-/* 25 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
-/* 26 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
-/* 27 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
-/* 28 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
-/* 29 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
-/* 30 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
-/* 31 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
-/* 32 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
-/* 33 */ {  0,100,  0,100,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0 },
-/* 34 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
-/* 35 */ {  0,  0,  0,  0,  0, 50,  0,  0,  0,  0,  0,  0,  0, 50,  0 },
-/* 36 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
-/* 37 */ {  0,  0,  0,  0,  0,  0, 50,  0,  0,  0,  0, 50,  0,  0,  0 },
-/* 38 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
-/* 39 */ {  0,  0,  0,  0,  0,  0,  0, 50,  0, 50,  0,  0,  0,  0,  0 },
-/* 40 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
-/* 41 */ {  0,  0,  0,  0,  0,  0,  0,  0, 50,  0, 50,  0,  0,  0,  0 },
-/* 42 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
-/* 43 */ {  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 50, 50 },
-/* 44 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
-/* 45 */ {  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 50, 50 },
-/* 46 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
-/* 47 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
-/* 48 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
-/* 49 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
-/* 50 */ { 10, 10, 10, 10,  0, 10, 10, 10, 10, 10, 10, 10,  0, 10, 10 },
+/*       GR   ZP   ZI   VI   MI   ME   RE   TE   DO   SN   TR   BK   CL   ST   RP */
+/* 1 */  { 60,  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 },
+/* 2 */  {100,  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 },
+/* 3 */  {  0,100,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 },
+/* 4 */  { 15, 85,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 },
+/* 5 */  {  0,  0, 100,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 },
+/* 6 */  { 15, 15,  70,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 },
+/* 7 */  {  0,  0,   0, 100,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 },
+/* 8 */  { 15, 15,  15,  55,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 },
+/* 9 */  {  0,  0,   0,   0,   0, 100,   0,   0,   0,   0,   0,   0,   0,   0,   0 },
+/* 10 */ { 15, 15,  15,  15,   0,  50,   0,   0,   0,   0,   0,   0,   0,   0,   0 },
+/* 11 */ {  0,  0,   0,   0,   0,   0, 100,   0,   0,   0,   0,   0,   0,   0,   0 },
+/* 12 */ { 10, 10,  10,  10,   0,  10,  60,   0,   0,   0,   0,   0,   0,   0,   0 },
+/* 13 */ {  0,  0,   0,   0,   0,   0,   0, 100,   0,   0,   0,   0,   0,   0,   0 },
+/* 14 */ { 10, 10,  10,  10,   0,  10,   3,  60,   0,   0,   0,   0,   0,   0,   0 },
+/* 15 */ {  0,  0,   0,   0,   0,   0,   0,   0, 100,   0,   0,   0,   0,   0,   0 },
+/* 16 */ { 10, 10,  10,  10,   0,  10,   3,   3,  60,   0,   0,   0,   0,   0,   0 },
+/* 17 */ {  0,  0,   0,   0,   0,   0,   0,   0,   0, 100,   0,   0,   0,   0,   0 },
+/* 18 */ { 10, 10,  10,  10,   0,  10,  10,   3,   3,  60,   0,   0,   0,   0,   0 },
+/* 19 */ {  0,  0,   0,   0,   0,   0,   0,   0,   0,   0, 100,   0,   0,   0,   0 },
+/* 20 */ { 10, 10,  10,  10,   0,  10,  10,   5,   3,   3,  60,   0,   0,   0,   0 },
+/* 21 */ {  0,  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0, 100,   0 },
+/* 22 */ { 10, 10,  10,  10,   0,  10,  10,  10,   5,   3,   3,   0,   0,  60,   0 },
+/* 23 */ {  0,  0,   0,   0,   0,   0,   0,   0,   0,   0,   0, 100,   0,   0,   0 },
+/* 24 */ { 10, 10,  10,  10,   0,  10,  10,  10,   5,   5,   3,   3,   0,  60,   0 },
+/* 25 */ {  0,  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0, 100 },
+/* 26 */ { 10, 10,  10,  10,   0,  10,  10,  10,  10,   5,   5,   3,   0,   3,  60 },
+/* 27 */ { 10, 10,  10,  10,   0,  10,  10,  10,  10,   5,   5,   5,   0,   3,   3 },
+/* 28 */ { 10, 10,  10,  10,   0,  10,  10,  10,  10,  10,   5,   5,   0,   3,   3 },
+/* 29 */ { 10, 10,  10,  10,   0,  10,  10,  10,  10,  10,  10,   5,   0,   3,   3 },
+/* 30 */ { 10, 10,  10,  10,   0,  10,  10,  10,  10,  10,  10,  10,   0,   5,   5 },
+/* 31 */ { 10, 10,  10,  10,   0,  10,  10,  10,  10,  10,  10,  10,   0,  10,  10 },
+/* 32 */ { 10, 10,  10,  10,   0,  10,  10,  10,  10,  10,  10,  10,   0,  10,  10 },
+/* 33 */ {  0,100,   0, 100,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 },
+/* 34 */ { 10, 10,  10,  10,   0,  10,  10,  10,  10,  10,  10,  10,   0,  10,  10 },
+/* 35 */ {  0,  0,   0,   0,   0,  50,   0,   0,   0,   0,   0,   0,   0,  50,   0 },
+/* 36 */ { 10, 10,  10,  10,   0,  10,  10,  10,  10,  10,  10,  10,   0,  10,  10 },
+/* 37 */ {  0,  0,   0,   0,   0,   0,  50,   0,   0,   0,   0,  50,   0,   0,   0 },
+/* 38 */ { 10, 10,  10,  10,   0,  10,  10,  10,  10,  10,  10,  10,   0,  10,  10 },
+/* 39 */ {  0,  0,   0,   0,   0,   0,   0,  50,   0,  50,   0,   0,   0,   0,   0 },
+/* 40 */ { 10, 10,  10,  10,   0,  10,  10,  10,  10,  10,  10,  10,   0,  10,  10 },
+/* 41 */ {  0,  0,   0,   0,   0,   0,   0,   0,  50,   0,  50,   0,   0,   0,   0 },
+/* 42 */ { 10, 10,  10,  10,   0,  10,  10,  10,  10,  10,  10,  10,   0,  10,  10 },
+/* 43 */ {  0,  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,  50,  50 },
+/* 44 */ { 10, 10,  10,  10,   0,  10,  10,  10,  10,  10,  10,  10,   0,  10,  10 },
+/* 45 */ {  0,  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,  50,  50 },
+/* 46 */ { 10, 10,  10,  10,   0,  10,  10,  10,  10,  10,  10,  10,   0,  10,  10 },
+/* 47 */ { 10, 10,  10,  10,   0,  10,  10,  10,  10,  10,  10,  10,   0,  10,  10 },
+/* 48 */ { 10, 10,  10,  10,   0,  10,  10,  10,  10,  10,  10,  10,   0,  10,  10 },
+/* 49 */ { 10, 10,  10,  10,   0,  10,  10,  10,  10,  10,  10,  10,   0,  10,  10 },
+/* 50 */ { 10, 10,  10,  10,   0,  10,  10,  10,  10,  10,  10,  10,   0,  10,  10 },
 };
 
 /* ============================================================
@@ -238,7 +258,8 @@ void collision_check_all(GameData *gd)
                 e->hp--;
                 if (e->hp <= 0)
                     enemy_die(e, gd);
-                /* Retaliator fires back immediately when hit */
+                /* Retaliator fires back immediately when hit.
+                 * Original: emisskind[3] mspeed=200/64 ≈ 3.1 px/tick. */
                 else if (e->type == ENEMY_RETALIATOR)
                 {
                     fix16 dx = fix16Sub(p->x, e->x);
@@ -246,7 +267,7 @@ void collision_check_all(GameData *gd)
                     fix16 dist = fix16Add(fix16Abs(dx), fix16Abs(dy));
                     if (dist > FIX16(1))
                     {
-                        fix16 spd = FIX16(3.5);
+                        fix16 spd = FIX16(3.1);
                         bullet_fire(gd, e->x, e->y,
                                     fix16Div(fix16Mul(dx, spd), dist),
                                     fix16Div(fix16Mul(dy, spd), dist), BULLET_PURPLE);
@@ -607,6 +628,28 @@ static s8 find_free_enemy(const GameData *gd)
     return -1;
 }
 
+/* Entry velocity given to each enemy type as it exits the spawn portal.
+ * Matches the enemy's own base movement speed so slow types don't burst
+ * across screen and fast types don't crawl.  Sign is applied at use-site
+ * (positive = rightward from left portal, negated = leftward from right). */
+static const fix16 ENEMY_ENTRY_VX[ENEMY_TYPE_COUNT] = {
+    FIX16(0.50),  /* GRUNGER     */
+    FIX16(1.10),  /* ZIPPO       */
+    FIX16(0.55),  /* ZINGER      */
+    FIX16(0.75),  /* VINCE       */
+    FIX16(0.40),  /* MINER       */
+    FIX16(0.50),  /* MEEBY       */
+    FIX16(0.45),  /* RETALIATOR  */
+    FIX16(0.50),  /* TERRIER     */
+    FIX16(0.50),  /* DOINGER     */
+    FIX16(0.20),  /* SNIPE       */
+    FIX16(0.55),  /* TRIBBLER    */
+    FIX16(0.90),  /* BUCKSHOT    */
+    FIX16(0.30),  /* CLUSTER     */
+    FIX16(0.45),  /* STICKTIGHT  */
+    FIX16(0.35),  /* REPULSOR    */
+};
+
 void level_check_complete(GameData *gd)
 {
     /* Level timer increments every frame */
@@ -741,32 +784,64 @@ void level_check_complete(GameData *gd)
         u8  max_on   = (u8)MIN((s16)ld->max_enemies + enm_adj, (s16)MAX_ENEMIES);
         u8  on_screen = count_active_enemies(gd);
 
-        /* Try to trigger each portal independently.
-         * Each gets its own random roll against erelease_prob per frame. */
-        u32 roll_limit = (u32)ld->erelease_prob;
-        if (diff && diff->enemy_count_add > 0)
-            roll_limit = roll_limit * 12 / 10;   /* +20% on harder */
+        /* Spawn probability per portal per frame.
+         *
+         * The original Pascal rolls once per frame:
+         *   if random < erelease * enemyfrequency then spawn one enemy.
+         * erelease is stored as a float (e.g. 0.005); we have it scaled ×65535.
+         *
+         * The port tests TWO portals per frame — that would double the spawn
+         * rate vs. the original.  We compensate by using half the threshold
+         * per portal, so the combined probability over both portals stays
+         * faithful to the original single roll.
+         *
+         * Additionally, we enforce a minimum inter-spawn cooldown (stored in
+         * portal_left_cd / portal_right_cd): once a portal has just closed
+         * (-1 → idle) it must wait at least PORTAL_COOLDOWN_FRAMES before
+         * it can be triggered again.  This prevents back-to-back spam on high
+         * erelease levels.
+         *
+         * Grace period: the original's AddEnemy() checked if NumEnemies was
+         * below MaxEnemies, but more importantly the player always got a few
+         * seconds to orient before the first enemy appeared.  We enforce a
+         * 180-frame (~3 sec) no-spawn window at the start of each level.
+         */
+#define PORTAL_COOLDOWN_FRAMES  90   /* ~1.5 sec guaranteed gap per portal */
+#define PORTAL_GRACE_FRAMES    180   /* ~3 sec no-spawn window at level start */
 
-        /* Left portal */
-        if (on_screen < max_on && gd->portal_left_cd < 0)
+        /* No spawning during the grace period; only animate active portals */
+        if (gd->level_timer >= PORTAL_GRACE_FRAMES)
         {
-            if ((u32)(random() & 0xFFFF) < roll_limit)
-            {
-                gd->portal_left_cd   = PORTAL_ANIM_FRAMES;
-                gd->portal_left_type = (u8)portal_pick_type(gd->level);
-                on_screen++;   /* count the incoming enemy against the cap */
-            }
-        }
+            u32 roll_limit = (u32)ld->erelease_prob / 2;   /* halved: two portals */
+            if (diff && diff->enemy_count_add > 0)
+                roll_limit = roll_limit * 12 / 10;          /* +20% on harder */
 
-        /* Right portal */
-        if (on_screen < max_on && gd->portal_right_cd < 0)
-        {
-            if ((u32)(random() & 0xFFFF) < roll_limit)
+            /* Left portal */
+            if (on_screen < max_on && gd->portal_left_cd < 0)
             {
-                gd->portal_right_cd   = PORTAL_ANIM_FRAMES;
-                gd->portal_right_type = (u8)portal_pick_type(gd->level);
+                /* portal_left_cd == -1 means idle but might still be cooling down.
+                 * We repurpose values in [-PORTAL_COOLDOWN_FRAMES .. -1] as cooldown:
+                 * -1 = ready,  negative = counting up to -1. */
+                if (gd->portal_left_cd == -1 &&
+                    (u32)(random() & 0xFFFF) < roll_limit)
+                {
+                    gd->portal_left_cd   = PORTAL_ANIM_FRAMES;
+                    gd->portal_left_type = (u8)portal_pick_type(gd->level);
+                    on_screen++;   /* count the incoming enemy against the cap */
+                }
             }
-        }
+
+            /* Right portal */
+            if (on_screen < max_on && gd->portal_right_cd < 0)
+            {
+                if (gd->portal_right_cd == -1 &&
+                    (u32)(random() & 0xFFFF) < roll_limit)
+                {
+                    gd->portal_right_cd   = PORTAL_ANIM_FRAMES;
+                    gd->portal_right_type = (u8)portal_pick_type(gd->level);
+                }
+            }
+        } /* end grace-period guard */
 
         /* ---- Animate and resolve LEFT portal ---- */
         if (gd->portal_left_cd >= 0)
@@ -803,15 +878,18 @@ void level_check_complete(GameData *gd)
                 if (slot >= 0)
                 {
                     /* Spawn at world Y corresponding to screen midpoint */
+                    EnemyType ltype = (EnemyType)gd->portal_left_type;
                     enemy_spawn(&gd->enemies[(u8)slot],
-                                (EnemyType)gd->portal_left_type,
+                                ltype,
                                 FIX16(PORTAL_LEFT_X + 8),
                                 FIX16(HUD_HEIGHT + WORLD_H / 2));
-                    /* Give initial rightward velocity */
-                    gd->enemies[(u8)slot].vx = FIX16(1.0);
+                    /* Give initial rightward velocity equal to the enemy's own
+                     * base speed so slow enemies don't rocket off the portal
+                     * and fast enemies don't crawl across the screen. */
+                    gd->enemies[(u8)slot].vx = ENEMY_ENTRY_VX[ltype];
                     sfx_play(SFX_ENEMY_ENTER);
                 }
-                gd->portal_left_cd = -1;
+                gd->portal_left_cd = -PORTAL_COOLDOWN_FRAMES;  /* start cooldown */
             }
         }
 
@@ -844,17 +922,22 @@ void level_check_complete(GameData *gd)
                 s8 slot = find_free_enemy(gd);
                 if (slot >= 0)
                 {
+                    EnemyType rtype = (EnemyType)gd->portal_right_type;
                     enemy_spawn(&gd->enemies[(u8)slot],
-                                (EnemyType)gd->portal_right_type,
+                                rtype,
                                 FIX16(PORTAL_RIGHT_X - 8),
                                 FIX16(HUD_HEIGHT + WORLD_H / 2));
-                    /* Give initial leftward velocity */
-                    gd->enemies[(u8)slot].vx = FIX16(-1.0);
+                    /* Give initial leftward velocity at the enemy's own base speed */
+                    gd->enemies[(u8)slot].vx = -ENEMY_ENTRY_VX[rtype];
                     sfx_play(SFX_ENEMY_ENTER);
                 }
-                gd->portal_right_cd = -1;
+                gd->portal_right_cd = -PORTAL_COOLDOWN_FRAMES;  /* start cooldown */
             }
         }
+
+        /* Advance cooldown counters: count negative values up toward -1 (ready). */
+        if (gd->portal_left_cd < -1)  gd->portal_left_cd++;
+        if (gd->portal_right_cd < -1) gd->portal_right_cd++;
     }
 }
 

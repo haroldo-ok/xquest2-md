@@ -10,8 +10,8 @@ const ROMHeader rom_header = {
     "SEGA MEGA DRIVE ",
 #endif
     "(C)SGDK 2026    ",
-    "XQUEST 2 v0.0.3                                 ",
-    "XQUEST 2 v0.0.3                                 ",
+    "XQUEST 2 v0.0.4                                 ",
+    "XQUEST 2 v0.0.4                                 ",
     "GM 00000000-00",
     0x000,
     "JD              ",
@@ -28,6 +28,6 @@ const ROMHeader rom_header = {
     0x00200000,
     0x0020FFFF,
     "            ",
-    "XQUEST 2 v0.0.3                         ",
+    "XQUEST 2 v0.0.4                         ",
     "JUE             "
 };

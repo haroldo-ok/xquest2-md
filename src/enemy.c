@@ -109,9 +109,10 @@ static const SpriteDefinition *ENEMY_SPR[ENEMY_TYPE_COUNT] = {
 static fix16 scaled_speed(const Enemy *e, fix16 base_speed)
 {
     /* difficulty scale: enemy speed_scale is a percentage (100 = normal) */
-    fix16 s = fix16Div(fix16Mul(base_speed, FIX16(e->speed_scale)), FIX16(100));
-    /* game speed ramp (g_game_speed = FIX16(1) normally, >1 when over par) */
-    return fix16Mul(s, g_game_speed);
+    /* Integer multiply: max FIX16(1.5)*160/100=FIX16(2.4), fits s32. */
+    fix16 s = (fix16)((s32)base_speed * (u8)e->speed_scale / 100);
+    /* Split-shift to avoid fix16Mul overflow: max 120M, fits s32. */
+    return (fix16)((s32)s * (g_game_speed >> 8) >> 8);
 }
 
 /* ============================================================
@@ -119,13 +120,15 @@ static fix16 scaled_speed(const Enemy *e, fix16 base_speed)
  * ============================================================ */
 static void move_toward(Enemy *e, fix16 tx, fix16 ty, fix16 speed)
 {
-    fix16 dx = fix16Sub(tx, e->x);
-    fix16 dy = fix16Sub(ty, e->y);
-    fix16 dist = fix16Add(fix16Abs(dx), fix16Abs(dy));   /* Manhattan approx */
-    if (dist < FIX16(1)) return;
+    /* Integer pixel coords avoid fix16Mul overflow (world up to 392px).
+     * Max: 392 * FIX16(2.0) = 52M — fits s32. */
+    s16 dx_i = fix16ToInt(fix16Sub(tx, e->x));
+    s16 dy_i = fix16ToInt(fix16Sub(ty, e->y));
+    s16 dist_i = (s16)(abs(dx_i) + abs(dy_i));
+    if (dist_i < 1) return;
     speed = scaled_speed(e, speed);
-    e->vx = fix16Div(fix16Mul(dx, speed), dist);
-    e->vy = fix16Div(fix16Mul(dy, speed), dist);
+    e->vx = (fix16)((s32)dx_i * speed / dist_i);
+    e->vy = (fix16)((s32)dy_i * speed / dist_i);
 }
 
 /* ============================================================
@@ -134,12 +137,12 @@ static void move_toward(Enemy *e, fix16 tx, fix16 ty, fix16 speed)
 static void move_away(Enemy *e, fix16 tx, fix16 ty, fix16 speed) __attribute__((unused));
 static void move_away(Enemy *e, fix16 tx, fix16 ty, fix16 speed)
 {
-    fix16 dx = fix16Sub(e->x, tx);
-    fix16 dy = fix16Sub(e->y, ty);
-    fix16 dist = fix16Add(fix16Abs(dx), fix16Abs(dy));
-    if (dist < FIX16(1)) return;
-    e->vx = fix16Div(fix16Mul(dx, speed), dist);
-    e->vy = fix16Div(fix16Mul(dy, speed), dist);
+    s16 dx_i = fix16ToInt(fix16Sub(e->x, tx));
+    s16 dy_i = fix16ToInt(fix16Sub(e->y, ty));
+    s16 dist_i = (s16)(abs(dx_i) + abs(dy_i));
+    if (dist_i < 1) return;
+    e->vx = (fix16)((s32)dx_i * speed / dist_i);
+    e->vy = (fix16)((s32)dy_i * speed / dist_i);
 }
 
 /* ============================================================
@@ -207,288 +210,321 @@ void enemy_spawn(Enemy *e, EnemyType type, fix16 x, fix16 y)
 
 /* ============================================================
  * PER-TYPE AI UPDATE
+ *
+ * All behaviour flags are from the original xquest.enm binary:
+ *   follows, curves, zoom, changedir, fireprob, follow_prob
+ *
+ * Velocity formula (non-following enemies):
+ *   Original: delx = (random(speed) - speed2) * gamespeed / 64
+ *   At gamespeed=64: range = [-(speed2/64), +(speed-speed2)/64] px/DOS-frame
+ *   Scaled to Genesis 60fps: multiply by 60/67
+ *
+ * changedir probability converted: p_gen = 1-(1-p_dos)^(60/67)
+ * We use deterministic timers at the mean interval (1/p_gen frames).
  * ============================================================ */
+
+/* Pick a new symmetric random velocity in fix16. range_fp is one-sided. */
+static void random_vel(Enemy *e, fix16 range_fp)
+{
+    s32 r;
+    r = (s32)(random() & 0xFFFF);
+    e->vx = (fix16)(r * range_fp / 32768 - range_fp);
+    r = (s32)(random() & 0xFFFF);
+    e->vy = (fix16)(r * range_fp / 32768 - range_fp);
+}
+
 static void ai_grunger(Enemy *e, GameData *gd)
 {
-    /* Slow random walk toward player; changes direction every ~30 frames */
+    /* follows=0, changedir=0.006 → avg 186 frames. Pure random walk.
+     * vel range: ±(60/64)*(60/67) ≈ ±0.84 px/frame. */
+    (void)gd;
     e->ai_timer++;
-    if (e->ai_timer >= 30)
+    if (e->ai_timer >= 186)
     {
-        e->ai_timer = 0;
-        move_toward(e, gd->player.x, gd->player.y, ENEMY_SPEED[ENEMY_GRUNGER]);
-        /* Small random perturbation so they don't all stack perfectly */
-        e->vx = fix16Add(e->vx, FIX16_FROM_FRAC((s16)(random() % 40) - 20, 100));
-        e->vy = fix16Add(e->vy, FIX16_FROM_FRAC((s16)(random() % 40) - 20, 100));
+        e->ai_timer = (s16)(random() % 40);
+        random_vel(e, FIX16(0.84));
     }
 }
 
 static void ai_zippo(Enemy *e, GameData *gd)
 {
-    /* Like grunger but faster and more frequent direction changes */
+    /* follows=0, curves=1, changedir=0.003 → avg 372 frames.
+     * Arc motion (curvesin/cos set here, rotated in enemies_update).
+     * vel range: ±(140/64)*(60/67) ≈ ±1.96 px/frame. */
+    (void)gd;
     e->ai_timer++;
-    if (e->ai_timer >= 12)
+    if (e->ai_timer >= 372)
     {
-        e->ai_timer = 0;
-        move_toward(e, gd->player.x, gd->player.y, ENEMY_SPEED[ENEMY_ZIPPO]);
+        e->ai_timer = (s16)(random() % 60);
+        random_vel(e, FIX16(1.96));
+        s16 cs = (s16)((s32)(random() % 2730) - 1365);
+        e->curvesin = cs;
+        e->curvecos = 32700;
     }
 }
 
 static void ai_zinger(Enemy *e, GameData *gd)
 {
-    /* Moves erratically and fires bullets in multiple directions */
+    /* follows=0, fires=1, changedir=0.006 → avg 186 frames.
+     * Random walk + 4-direction burst fire every ~50 frames.
+     * vel range: ±(50/64)*(60/67) ≈ ±0.70 px/frame. */
     e->ai_timer++;
-    if (e->ai_timer >= 20)
+    if (e->ai_timer >= 186)
     {
-        e->ai_timer = 0;
-        /* Fire in 4 directions */
-        fix16 spd = FIX16(2.5);
+        e->ai_timer = (s16)(random() % 40);
+        random_vel(e, FIX16(0.70));
+    }
+    if ((g_frame_count % 50) == ((u32)e & 0x3F))
+    {
+        fix16 spd = FIX16(1.8);
         bullet_fire(gd, e->x, e->y,  spd,      FIX16(0), BULLET_GREEN);
         bullet_fire(gd, e->x, e->y, FIX16(0),  spd,      BULLET_GREEN);
         bullet_fire(gd, e->x, e->y, -spd,      FIX16(0), BULLET_GREEN);
         bullet_fire(gd, e->x, e->y, FIX16(0), -spd,      BULLET_GREEN);
         sfx_play(SFX_ENEMY_SHOOT);
     }
-    /* Random movement */
-    if ((g_frame_count & 0x1F) == 0)
-    {
-        e->vx = FIX16_FROM_FRAC((random() % 200 - 100) * 15, 1000);
-        e->vy = FIX16_FROM_FRAC((random() % 200 - 100) * 15, 1000);
-    }
 }
 
 static void ai_vince(Enemy *e, GameData *gd)
 {
-    /* Moves purposefully; takes many hits */
-    move_toward(e, gd->player.x, gd->player.y, ENEMY_SPEED[ENEMY_VINCE]);
+    /* follows=0, rebounds=1, changedir=0.003 → avg 372 frames.
+     * Holds direction and bounces off walls; rare direction changes.
+     * vel range: ±(100/64)*(60/67) ≈ ±1.40 px/frame. */
+    (void)gd;
+    e->ai_timer++;
+    if (e->ai_timer >= 372)
+    {
+        e->ai_timer = (s16)(random() % 60);
+        random_vel(e, FIX16(1.40));
+    }
 }
 
 static void ai_miner(Enemy *e, GameData *gd)
 {
-    /* Moves around and periodically drops mines */
+    /* No original data (blank slot). Slow random walker that drops mines. */
     e->ai_timer++;
-    move_toward(e, gd->player.x, gd->player.y, ENEMY_SPEED[ENEMY_MINER]);
-    if (e->ai_timer >= 90)
+    if (e->ai_timer >= 186)
     {
-        e->ai_timer = 0;
-        mine_place(gd, e->x, e->y);
+        e->ai_timer = (s16)(random() % 40);
+        random_vel(e, FIX16(0.40));
     }
+    if ((g_frame_count % 120) == ((u32)e & 0x7F))
+        mine_place(gd, e->x, e->y);
 }
 
 static void ai_meeby(Enemy *e, GameData *gd)
 {
-    /* Large, slow, tough.
-     * Original: moves in arcs (curves=TRUE) with periodic charge.
-     * curvesin/curvecos rotate the velocity vector each frame, producing
-     * the distinctive "moth" arc path.  Every ~90 frames the curve
-     * direction flips randomly (changecurve) and a charge occurs. */
+    /* follows=0, curves=1, changedir=0.006 → avg 186 frames.
+     * Arc motion; on direction change re-aims toward player.
+     * vel range: ±(60/64)*(60/67) ≈ ±0.84 px/frame. */
     e->ai_timer++;
-
-    /* Rotate velocity by the curve matrix every frame */
+    /* Rotate velocity by arc matrix every frame */
     if (e->curvesin != 0)
     {
-        /* new_vx = vx*cos - vy*sin  (curvecos/curvesin are Q15, i.e. ×32767)
-         * fix16 is typedef s32 in SGDK — the value is already the raw bits. */
-        s32 vx32 = (s32)e->vx;
-        s32 vy32 = (s32)e->vy;
-        s32 nvx = (vx32 * (s32)e->curvecos - vy32 * (s32)e->curvesin) >> 15;
-        s32 nvy = (vy32 * (s32)e->curvecos + vx32 * (s32)e->curvesin) >> 15;
+        s32 vx32 = (s32)e->vx >> 8;
+        s32 vy32 = (s32)e->vy >> 8;
+        s32 nvx = (vx32 * e->curvecos - vy32 * e->curvesin) >> 7;
+        s32 nvy = (vy32 * e->curvecos + vx32 * e->curvesin) >> 7;
         e->vx = (fix16)nvx;
         e->vy = (fix16)nvy;
     }
-
-    /* Periodically re-aim and randomise curve */
-    if (e->ai_timer >= 90)
+    if (e->ai_timer >= 186)
     {
-        e->ai_timer = 0;
-
-        if (e->ai_state == 0)
-        {
-            /* Cruise phase: slow approach with curve */
-            move_toward(e, gd->player.x, gd->player.y, FIX16(0.6));
-            /* Pick a small random arc angle: ±3° (sin ≈ ±1638/32767) */
-            e->curvesin = (s16)(((s16)(random() % 3276) - 1638));
-            /* cos = sqrt(1 - sin²) approx via lookup – use 32700 for small angles */
-            e->curvecos = 32700;
-            e->ai_state = 1;
-        }
-        else
-        {
-            /* Charge phase: fast direct lunge */
-            move_toward(e, gd->player.x, gd->player.y,
-                        scaled_speed(e, FIX16(1.8)));
-            e->curvesin = 0;
-            e->curvecos = 32767;
-            e->ai_state = 0;
-        }
+        e->ai_timer = (s16)(random() % 40);
+        move_toward(e, gd->player.x, gd->player.y, ENEMY_SPEED[ENEMY_MEEBY]);
+        s16 cs = (s16)((s32)(random() % 2184) - 1092);
+        e->curvesin = cs;
+        e->curvecos = 32700;
     }
 }
 
 static void ai_retaliator(Enemy *e, GameData *gd)
 {
-    /* Moves slowly; fires back when hit (handled in damage code) */
+    /* follows=1, follow_prob=0.01 → avg 100 frames between homing.
+     * changedir=0.006 → random nudge at ~186 frames otherwise. */
     e->ai_timer++;
-    if (e->ai_timer >= 60)
+    if (e->ai_timer >= 100)
     {
-        e->ai_timer = 0;
+        e->ai_timer = (s16)(random() % 30);
         move_toward(e, gd->player.x, gd->player.y, ENEMY_SPEED[ENEMY_RETALIATOR]);
     }
+    else if (e->ai_timer == 50)
+        random_vel(e, FIX16(0.56));
 }
 
 static void ai_terrier(Enemy *e, GameData *gd)
 {
-    /* Ignores player until within sensing range, then relentlessly chases */
-    fix16 dx = fix16Abs(fix16Sub(gd->player.x, e->x));
-    fix16 dy = fix16Abs(fix16Sub(gd->player.y, e->y));
+    /* follows=0, changedir=0.006 → avg 186 frames.
+     * Custom: random walk until player is within 80px, then hunts. */
     if (e->ai_state == 0)
     {
-        /* Idle: random wander */
-        if ((g_frame_count & 0x3F) == 0)
+        e->ai_timer++;
+        if (e->ai_timer >= 186)
         {
-            e->vx = FIX16_FROM_FRAC((random() % 100 - 50) * 2, 100);
-            e->vy = FIX16_FROM_FRAC((random() % 100 - 50) * 2, 100);
+            e->ai_timer = (s16)(random() % 40);
+            random_vel(e, FIX16(0.84));
         }
-        /* Detect player */
-        if (dx < FIX16(80) && dy < FIX16(80))
+        s16 dx_i = fix16ToInt(fix16Sub(gd->player.x, e->x));
+        s16 dy_i = fix16ToInt(fix16Sub(gd->player.y, e->y));
+        if (abs(dx_i) < 80 && abs(dy_i) < 80)
             e->ai_state = 1;
     }
     else
     {
-        /* Hunting: fast chase */
-        move_toward(e, gd->player.x, gd->player.y, ENEMY_SPEED[ENEMY_TERRIER]);
+        e->ai_timer++;
+        if (e->ai_timer >= 30)
+        {
+            e->ai_timer = 0;
+            move_toward(e, gd->player.x, gd->player.y, ENEMY_SPEED[ENEMY_TERRIER]);
+        }
     }
 }
 
 static void ai_doinger(Enemy *e, GameData *gd)
 {
-    /* Gets faster and fires more as ai_timer increases.
-     * Cap ai_timer at 600 so speed and fire rate don't overflow. */
-    if (e->ai_timer < 600) e->ai_timer++;
-
-    fix16 base_speed = fix16Add(ENEMY_SPEED[ENEMY_DOINGER],
-                                FIX16_FROM_FRAC(e->ai_timer, 300));
-    base_speed = MIN(base_speed, FIX16(3.5));
-    move_toward(e, gd->player.x, gd->player.y, base_speed);
-
-    /* Fire interval shrinks from 60 frames down to 10 as timer grows */
-    u16 fire_interval = (u16)MAX(60 - (s16)(e->ai_timer / 10), 10);
-    if ((g_frame_count % fire_interval) == 0)
+    /* follows=0, zoom=1, changedir=0.020 → avg 56 frames (frequent).
+     * zoom=1: when player moves slowly, charges at 1.5× speed.
+     * Fires aimed shots, rate increasing over time. */
+    if (e->ai_timer < 900) e->ai_timer++;
+    e->ai_state++;
+    u16 cd = (u16)MAX(56 - (s16)(e->ai_timer / 30), 20);
+    if (e->ai_state >= cd)
     {
-        fix16 spd = FIX16(2.5);
-        fix16 dx = fix16Sub(gd->player.x, e->x);
-        fix16 dy = fix16Sub(gd->player.y, e->y);
-        fix16 dist = fix16Add(fix16Abs(dx), fix16Abs(dy));
-        if (dist > FIX16(1))
+        e->ai_state = 0;
+        fix16 pspd = fix16Add(fix16Abs(gd->player.vx), fix16Abs(gd->player.vy));
+        if (pspd < FIX16(1.0))
+            move_toward(e, gd->player.x, gd->player.y, scaled_speed(e, FIX16(0.75)));
+        else
+        {
+            fix16 r = fix16Add(ENEMY_SPEED[ENEMY_DOINGER], FIX16_FROM_FRAC(e->ai_timer, 1800));
+            if (r > FIX16(1.5)) r = FIX16(1.5);
+            random_vel(e, r);
+        }
+    }
+    u16 fire_cd = (u16)MAX(90 - (s16)(e->ai_timer / 15), 30);
+    if ((g_frame_count % fire_cd) == ((u32)e & 0x1F))
+    {
+        fix16 spd = FIX16(1.8);
+        s16 dx_i = fix16ToInt(fix16Sub(gd->player.x, e->x));
+        s16 dy_i = fix16ToInt(fix16Sub(gd->player.y, e->y));
+        s16 di   = (s16)(abs(dx_i) + abs(dy_i));
+        if (di > 0)
             bullet_fire(gd, e->x, e->y,
-                        fix16Div(fix16Mul(dx, spd), dist),
-                        fix16Div(fix16Mul(dy, spd), dist), BULLET_GREEN);
+                        (fix16)((s32)dx_i * spd / di),
+                        (fix16)((s32)dy_i * spd / di), BULLET_GREEN);
     }
 }
 
 static void ai_snipe(Enemy *e, GameData *gd)
 {
-    /* Stays still, waits for clear line of sight, then fires accurate shot */
+    /* follows=0, fires=1, changedir=0.003 → avg 372 frames. Nearly stationary. */
     e->ai_timer++;
-    if (e->ai_timer >= 120)
+    if (e->ai_timer >= 372)
     {
-        e->ai_timer = 0;
-        /* Fire toward player */
-        fix16 dx = fix16Sub(gd->player.x, e->x);
-        fix16 dy = fix16Sub(gd->player.y, e->y);
-        fix16 dist = fix16Add(fix16Abs(dx), fix16Abs(dy));
-        if (dist > FIX16(1))
+        e->ai_timer = (s16)(random() % 60);
+        random_vel(e, FIX16(0.25));
+    }
+    if ((g_frame_count % 150) == ((u32)e & 0x7F))
+    {
+        fix16 spd = FIX16(2.3);
+        s16 dx_i = fix16ToInt(fix16Sub(gd->player.x, e->x));
+        s16 dy_i = fix16ToInt(fix16Sub(gd->player.y, e->y));
+        s16 di   = (s16)(abs(dx_i) + abs(dy_i));
+        if (di > 0)
         {
-            fix16 spd = FIX16(4.0);
             bullet_fire(gd, e->x, e->y,
-                        fix16Div(fix16Mul(dx, spd), dist),
-                        fix16Div(fix16Mul(dy, spd), dist), BULLET_YELLOW);
+                        (fix16)((s32)dx_i * spd / di),
+                        (fix16)((s32)dy_i * spd / di), BULLET_YELLOW);
             sfx_play(SFX_ENEMY_SHOOT);
         }
-    }
-    /* Slight drift */
-    if ((g_frame_count & 0x7F) == 0)
-    {
-        e->vx = FIX16_FROM_FRAC((random() % 60 - 30), 100);
-        e->vy = FIX16_FROM_FRAC((random() % 60 - 30), 100);
     }
 }
 
 static void ai_tribbler(Enemy *e, GameData *gd)
 {
-    /* Very friendly - moves toward player.
-     * When hit (hp reaches 0), splits into 2 smaller ones.
-     * Split handled in enemy_die. */
-    move_toward(e, gd->player.x, gd->player.y, ENEMY_SPEED[ENEMY_TRIBBLER]);
+    /* follows=0, changedir=0.004 → avg 279 frames. Random walk; splits on death. */
+    (void)gd;
+    e->ai_timer++;
+    if (e->ai_timer >= 279)
+    {
+        e->ai_timer = (s16)(random() % 50);
+        random_vel(e, FIX16(0.91));
+    }
 }
 
 static void ai_buckshot(Enemy *e, GameData *gd)
 {
-    /* Fires many bullets at once (more than Zinger) */
+    /* follows=0, curves=1, changedir=0.005 → avg 223 frames.
+     * Arc motion + 8-direction burst fire every ~60 frames. */
     e->ai_timer++;
-    if (e->ai_timer >= 25)
+    if (e->ai_timer >= 223)
     {
-        e->ai_timer = 0;
-        /* Fire in 8 directions */
+        e->ai_timer = (s16)(random() % 40);
+        random_vel(e, FIX16(1.54));
+        s16 cs = (s16)((s32)(random() % 2730) - 1365);
+        e->curvesin = cs;
+        e->curvecos = 32700;
+    }
+    if ((g_frame_count % 60) == ((u32)e & 0x3F))
+    {
+        fix16 spd = FIX16(2.3);
         for (u8 d = 0; d < 8; d++)
-        {
-            fix16 spd = FIX16(2.0);
             bullet_fire(gd, e->x, e->y,
-                        fix16Mul(DIR_DVX[d], spd),
-                        fix16Mul(DIR_DVY[d], spd), BULLET_BUCKSHOT);
-        }
+                        (fix16)((s32)(DIR_DVX[d] >> 8) * spd >> 8),
+                        (fix16)((s32)(DIR_DVY[d] >> 8) * spd >> 8), BULLET_BUCKSHOT);
         sfx_play(SFX_ENEMY_SHOOT);
     }
-    move_toward(e, gd->player.x, gd->player.y, ENEMY_SPEED[ENEMY_BUCKSHOT]);
 }
 
 static void ai_cluster(Enemy *e, GameData *gd)
 {
-    /* Slow and harmless - just drifts. On death splits into dangerous pieces.
-     * Split handled in enemy_die. */
+    /* follows=0, changedir=0.006 → avg 186 frames. Harmless random walk;
+     * dangerous only on death (splits into fast pieces in enemy_die). */
+    (void)gd;
     e->ai_timer++;
-    if (e->ai_timer >= 60)
+    if (e->ai_timer >= 186)
     {
-        e->ai_timer = 0;
-        /* Gentle random drift */
-        e->vx = FIX16_FROM_FRAC((random() % 100 - 50) * 8, 1000);
-        e->vy = FIX16_FROM_FRAC((random() % 100 - 50) * 8, 1000);
+        e->ai_timer = (s16)(random() % 40);
+        random_vel(e, FIX16(0.70));
     }
 }
 
 static void ai_sticktight(Enemy *e, GameData *gd)
 {
-    /* Moves fast toward player and is very hard to shake off (homing) */
-    move_toward(e, gd->player.x, gd->player.y, ENEMY_SPEED[ENEMY_STICKTIGHT]);
-    /* If close, maintain that distance and circle */
-    fix16 dx = fix16Abs(fix16Sub(gd->player.x, e->x));
-    fix16 dy = fix16Abs(fix16Sub(gd->player.y, e->y));
-    if (dx < FIX16(20) && dy < FIX16(20))
+    /* follows=0, changedir=0.020 → avg 56 frames (frequent changes).
+     * When close to player, adds a perpendicular (orbit) component. */
+    e->ai_timer++;
+    if (e->ai_timer >= 56)
     {
-        /* Orbit: add perpendicular component */
-        fix16 perp_x = fix16Sub(FIX16(0), e->vy);
-        fix16 perp_y = e->vx;
-        e->vx = fix16Add(e->vx, fix16Mul(perp_x, FIX16(0.3)));
-        e->vy = fix16Add(e->vy, fix16Mul(perp_y, FIX16(0.3)));
+        e->ai_timer = (s16)(random() % 15);
+        s16 dx_i = fix16ToInt(fix16Sub(gd->player.x, e->x));
+        s16 dy_i = fix16ToInt(fix16Sub(gd->player.y, e->y));
+        if (abs(dx_i) < 24 && abs(dy_i) < 24)
+        {
+            fix16 px = -e->vy;
+            fix16 py =  e->vx;
+            e->vx = fix16Add(e->vx, (fix16)((s32)(px >> 8) * FIX16(0.3) >> 8));
+            e->vy = fix16Add(e->vy, (fix16)((s32)(py >> 8) * FIX16(0.3) >> 8));
+        }
+        else
+            random_vel(e, FIX16(0.56));
     }
 }
 
 static void ai_repulsor(Enemy *e, GameData *gd)
 {
-    /* Pushes player away with a powerful force field */
-    fix16 dx = fix16Sub(gd->player.x, e->x);
-    fix16 dy = fix16Sub(gd->player.y, e->y);
-    fix16 dist = fix16Add(fix16Abs(dx), fix16Abs(dy));
-
-    if (dist < FIX16(96) && dist > FIX16(1))
+    /* follows=1, follow_prob=1.0 → homes EVERY frame (always moves toward player).
+     * Simultaneously pushes player away with a force field. */
+    move_toward(e, gd->player.x, gd->player.y, ENEMY_SPEED[ENEMY_REPULSOR]);
+    s16 dx_i   = fix16ToInt(fix16Sub(gd->player.x, e->x));
+    s16 dy_i   = fix16ToInt(fix16Sub(gd->player.y, e->y));
+    s16 dist_i = (s16)(abs(dx_i) + abs(dy_i));
+    if (dist_i > 0 && dist_i < 96)
     {
-        /* Push player away - inversely proportional to distance */
-        fix16 force = fix16Div(FIX16(12), dist);
-        gd->player.vx = fix16Add(gd->player.vx, fix16Div(fix16Mul(dx, force), dist));
-        gd->player.vy = fix16Add(gd->player.vy, fix16Div(fix16Mul(dy, force), dist));
+        fix16 force = FIX16(12) / dist_i;
+        gd->player.vx = fix16Add(gd->player.vx, (fix16)((s32)dx_i * force / dist_i));
+        gd->player.vy = fix16Add(gd->player.vy, (fix16)((s32)dy_i * force / dist_i));
     }
-
-    /* Repulsor itself drifts slowly */
-    if ((g_frame_count & 0x1F) == 0)
-        move_toward(e, gd->player.x, gd->player.y, FIX16(0.3));
 }
 
 /* AI dispatch table */
@@ -529,10 +565,11 @@ void enemies_update(GameData *gd)
          * curve bends it each frame (matching original curvesin/curvecos logic). */
         if (e->curvesin != 0)
         {
-            s32 vx32 = (s32)e->vx;
-            s32 vy32 = (s32)e->vy;
-            s32 nvx = (vx32 * (s32)e->curvecos - vy32 * (s32)e->curvesin) >> 15;
-            s32 nvy = (vy32 * (s32)e->curvecos + vx32 * (s32)e->curvesin) >> 15;
+            /* Split-shift: vx>>8 first so product fits s32, then >>7 not >>15. */
+            s32 vx32 = (s32)e->vx >> 8;
+            s32 vy32 = (s32)e->vy >> 8;
+            s32 nvx = (vx32 * e->curvecos - vy32 * e->curvesin) >> 7;
+            s32 nvy = (vy32 * e->curvecos + vx32 * e->curvesin) >> 7;
             e->vx = (fix16)nvx;
             e->vy = (fix16)nvy;
         }

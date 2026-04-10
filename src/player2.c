@@ -247,8 +247,18 @@ void player2_update(GameData *gd)
         SPR_setPosition(p->spr,
                         fix16ToInt(p->x) - 8 - gd->cam_x,
                         fix16ToInt(p->y) - 8 - gd->cam_y);
+        static const u8 DIR_TO_FRAME[8] = {
+             6,   /* DIR_RIGHT      */
+             9,   /* DIR_UP_RIGHT   */
+            12,   /* DIR_UP         */
+            15,   /* DIR_UP_LEFT    */
+            18,   /* DIR_LEFT       */
+            21,   /* DIR_DOWN_LEFT  */
+             0,   /* DIR_DOWN       */
+             3,   /* DIR_DOWN_RIGHT */
+        };
         if (p->dir != DIR_NONE)
-            SPR_setFrame(p->spr, (u16)p->dir);
+            SPR_setFrame(p->spr, DIR_TO_FRAME[(u8)p->dir]);
     }
 }
 

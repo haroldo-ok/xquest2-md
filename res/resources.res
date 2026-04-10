@@ -11,6 +11,7 @@ PALETTE pal_enemy       "palettes/pal_enemy.png"
 
 # --- TITLE SCREEN ---
 IMAGE   img_title       "screens/title_screen.png"  BEST
+PALETTE pal_title       "screens/title_screen.png"
 
 # --- BACKGROUND TILES ---
 

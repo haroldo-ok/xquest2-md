@@ -259,8 +259,23 @@ void player_draw(Player *p, GameData *gd)
     SPR_setPosition(p->spr,
                     fix16ToInt(p->x) - 8 - gd->cam_x,
                     fix16ToInt(p->y) - 8 - gd->cam_y);
+    /* Map Genesis Direction enum to the correct GFX frame index.
+     * The DOS original uses: ShipDir = round(theta/(2π)*24)
+     * where theta=0 = pointing DOWN, increasing clockwise.
+     * Frame 0=DOWN, 3=DOWN_RIGHT, 6=RIGHT, 9=UP_RIGHT,
+     *       12=UP,  15=UP_LEFT,  18=LEFT, 21=DOWN_LEFT */
+    static const u8 DIR_TO_FRAME[8] = {
+         6,   /* DIR_RIGHT      */
+         9,   /* DIR_UP_RIGHT   */
+        12,   /* DIR_UP         */
+        15,   /* DIR_UP_LEFT    */
+        18,   /* DIR_LEFT       */
+        21,   /* DIR_DOWN_LEFT  */
+         0,   /* DIR_DOWN       */
+         3,   /* DIR_DOWN_RIGHT */
+    };
     if (p->dir != DIR_NONE)
-        SPR_setFrame(p->spr, (u16)p->dir);
+        SPR_setFrame(p->spr, DIR_TO_FRAME[(u8)p->dir]);
     SPR_setHFlip(p->spr, FALSE);
 }
 /* ============================================================

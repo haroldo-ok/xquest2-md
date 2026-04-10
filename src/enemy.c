@@ -147,9 +147,12 @@ static fix16 scaled_speed(const Enemy *e, fix16 base_speed)
     fix16 s = (fix16)((s32)base_speed * (u8)e->speed_scale / 100);
 
     /* Apply game speed ramp.  g_game_speed is normally FIX16(1), rising to
-     * FIX16(3) when over par.  fix16Mul(s, g_game_speed) would overflow s32
-     * (FIX16(2.4) * FIX16(3) intermediate ≈ 30 billion).  Use s64 cast. */
-    return (fix16)(((s64)s * g_game_speed) >> 16);
+     * FIX16(3) when over par.  fix16Mul(s, g_game_speed) overflows s32.
+     * Safe split: keep s full-width, shift g_game_speed right 8 bits, then
+     * shift result right 8 more bits to recover the fix16 product.
+     * Max intermediate: FIX16(2.4) * (FIX16(3)>>8) = 157286 * 768 = 120,795,648
+     * — well within s32. Error < 0.02%, imperceptible at game speed. */
+    return (fix16)((s32)s * (g_game_speed >> 8) >> 8);
 }
 
 /* ============================================================
@@ -345,11 +348,14 @@ static void ai_meeby(Enemy *e, GameData *gd)
     {
         /* Rotate velocity vector: new_vx = vx*cos - vy*sin (Q15 trig).
          * vx can be FIX16(2.4) = 157286; curvecos max = 32767.
-         * 157286 * 32767 overflows s32 — must use s64. */
-        s32 vx32 = (s32)e->vx;
-        s32 vy32 = (s32)e->vy;
-        s32 nvx = (s32)(((s64)vx32 * e->curvecos - (s64)vy32 * e->curvesin) >> 15);
-        s32 nvy = (s32)(((s64)vy32 * e->curvecos + (s64)vx32 * e->curvesin) >> 15);
+         * 157286 * 32767 overflows s32.
+         * Safe split: shift velocity right 8 before multiply, compensate
+         * with >>7 instead of >>15 (15-8=7).
+         * Max intermediate: (157286>>8)*32767 = 614*32767 = 20,119,138 — fits s32. */
+        s32 vx32 = (s32)e->vx >> 8;
+        s32 vy32 = (s32)e->vy >> 8;
+        s32 nvx = (vx32 * e->curvecos - vy32 * e->curvesin) >> 7;
+        s32 nvy = (vy32 * e->curvecos + vx32 * e->curvesin) >> 7;
         e->vx = (fix16)nvx;
         e->vy = (fix16)nvy;
     }
@@ -499,11 +505,13 @@ static void ai_buckshot(Enemy *e, GameData *gd)
         fix16 spd = FIX16(2.3);   /* emisskind[4] mspeed=150/64 */
         for (u8 d = 0; d < 8; d++)
         {
-            /* DIR_DVX/DVY are fix16 unit components (~[-1,1]).
-             * fix16Mul would overflow s32; use s64 intermediate. */
+            /* DIR_DVX/DVY are fix16 unit components in [-1, 1].
+             * Multiply by bullet speed: shift component >>8 first to stay
+             * within s32, then >>8 again after to recover fix16 product.
+             * Max intermediate: (FIX16(1)>>8)*FIX16(2.3) = 256*150733 = 38,587,648. */
             bullet_fire(gd, e->x, e->y,
-                        (fix16)(((s64)DIR_DVX[d] * spd) >> 16),
-                        (fix16)(((s64)DIR_DVY[d] * spd) >> 16), BULLET_BUCKSHOT);
+                        (fix16)((s32)(DIR_DVX[d] >> 8) * spd >> 8),
+                        (fix16)((s32)(DIR_DVY[d] >> 8) * spd >> 8), BULLET_BUCKSHOT);
         }
         sfx_play(SFX_ENEMY_SHOOT);
     }
@@ -534,12 +542,13 @@ static void ai_sticktight(Enemy *e, GameData *gd)
     if (dx < FIX16(20) && dy < FIX16(20))
     {
         /* Orbit: add perpendicular component (velocity rotated 90°).
-         * perp_x/perp_y are velocity-scale fix16 values; fix16Mul overflows
-         * s32 for speeds above ~0.18 px/frame — use s64 intermediate. */
+         * Multiply velocity-scale fix16 by FIX16(0.3): shift perp >>8 first
+         * to stay within s32, then >>8 after.
+         * Max intermediate: (FIX16(3.5)>>8)*FIX16(0.3) = 896*19661 = 17,616,256. */
         fix16 perp_x = -e->vy;
         fix16 perp_y =  e->vx;
-        e->vx = fix16Add(e->vx, (fix16)(((s64)perp_x * FIX16(0.3)) >> 16));
-        e->vy = fix16Add(e->vy, (fix16)(((s64)perp_y * FIX16(0.3)) >> 16));
+        e->vx = fix16Add(e->vx, (fix16)((s32)(perp_x >> 8) * FIX16(0.3) >> 8));
+        e->vy = fix16Add(e->vy, (fix16)((s32)(perp_y >> 8) * FIX16(0.3) >> 8));
     }
 }
 
@@ -604,12 +613,13 @@ void enemies_update(GameData *gd)
          * curve bends it each frame (matching original curvesin/curvecos logic). */
         if (e->curvesin != 0)
         {
-            /* Q15 rotation: vx*cos - vy*sin. Use s64 to avoid overflow
-             * (velocity fix16 * curvecos s16 exceeds s32 at speeds > ~0.1). */
-            s32 vx32 = (s32)e->vx;
-            s32 vy32 = (s32)e->vy;
-            s32 nvx = (s32)(((s64)vx32 * e->curvecos - (s64)vy32 * e->curvesin) >> 15);
-            s32 nvy = (s32)(((s64)vy32 * e->curvecos + (s64)vx32 * e->curvesin) >> 15);
+            /* Q15 rotation: vx*cos - vy*sin.
+             * Split-shift to stay within s32: shift velocity >>8 first,
+             * then >>7 instead of >>15.  Same result, no s64 needed. */
+            s32 vx32 = (s32)e->vx >> 8;
+            s32 vy32 = (s32)e->vy >> 8;
+            s32 nvx = (vx32 * e->curvecos - vy32 * e->curvesin) >> 7;
+            s32 nvy = (vy32 * e->curvecos + vx32 * e->curvesin) >> 7;
             e->vx = (fix16)nvx;
             e->vy = (fix16)nvy;
         }

@@ -10,6 +10,7 @@ extern const u8 sfx_5[36352];
 extern const u8 sfx_6[7424];
 extern const u8 sfx_7[512];
 extern const u8 sfx_8[16896];
+extern const Palette pal_title;
 extern const Palette pal_bg;
 extern const Palette pal_active;
 extern const Palette pal_collect;

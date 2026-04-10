@@ -1051,19 +1051,19 @@ void hud_update_score(u32 score)
 void title_show(void)
 {
     /* Clear display */
+    SPR_reset();
     VDP_clearPlane(BG_A, TRUE);
     VDP_clearPlane(BG_B, TRUE);
 
-    /* Load title image to plane B */
-    /* Genesis display is 320x224; title is 320x240 - crop 8px top/bottom */
+    /* Load the title screen's own 16-color palette into PAL0 */
+    PAL_setPalette(PAL_BG, pal_title.data, CPU);
+
+    /* Draw title image to plane B */
     VDP_drawImageEx(BG_B, &img_title, TILE_ATTR_FULL(PAL_BG, FALSE, FALSE, FALSE, TILE_USERINDEX),
                     0, 0, FALSE, CPU);
 
-    /* Draw title text */
-    VDP_drawText("XQUEST  2", 11, 12);
-    VDP_drawText("PRESS START", 10, 22);
-    VDP_drawText("by Mark Mackey", 9, 24);
-    VDP_drawText("SEGA GENESIS PORT", 7, 26);
+    /* Overlay text */
+    VDP_drawText("PRESS START", 10, 26);
 
     /* Wait for START */
     while (TRUE)
@@ -1072,6 +1072,12 @@ void title_show(void)
         u16 joy = JOY_readJoypad(JOY_1);
         if (joy & BUTTON_START) break;
     }
+
+    /* Restore game palettes */
+    PAL_setPalette(PAL_BG,      pal_bg.data,      CPU);
+    PAL_setPalette(PAL_ACTIVE,  pal_active.data,  CPU);
+    PAL_setPalette(PAL_COLLECT, pal_collect.data, CPU);
+    PAL_setPalette(PAL_ENEMY,   pal_enemy.data,   CPU);
 
     VDP_clearPlane(BG_B, TRUE);
     VDP_clearPlane(BG_A, TRUE);

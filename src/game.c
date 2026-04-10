@@ -262,16 +262,14 @@ void collision_check_all(GameData *gd)
                  * Original: emisskind[3] mspeed=200/64 ≈ 3.1 px/tick. */
                 else if (e->type == ENEMY_RETALIATOR)
                 {
-                    fix16 dx = fix16Sub(p->x, e->x);
-                    fix16 dy = fix16Sub(p->y, e->y);
-                    fix16 dist = fix16Add(fix16Abs(dx), fix16Abs(dy));
-                    if (dist > FIX16(1))
-                    {
-                        fix16 spd = FIX16(3.1);
+                    fix16 spd = FIX16(3.1);
+                    s16 dx_i = fix16ToInt(fix16Sub(p->x, e->x));
+                    s16 dy_i = fix16ToInt(fix16Sub(p->y, e->y));
+                    s16 dist_i = (s16)(abs(dx_i) + abs(dy_i));
+                    if (dist_i > 0)
                         bullet_fire(gd, e->x, e->y,
-                                    fix16Div(fix16Mul(dx, spd), dist),
-                                    fix16Div(fix16Mul(dy, spd), dist), BULLET_PURPLE);
-                    }
+                                    (fix16)((s32)dx_i * spd / dist_i),
+                                    (fix16)((s32)dy_i * spd / dist_i), BULLET_PURPLE);
                 }
                 break;   /* one bullet hits one enemy per iteration */
             }

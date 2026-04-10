@@ -138,10 +138,18 @@ static const SpriteDefinition *ENEMY_SPR[ENEMY_TYPE_COUNT] = {
 /* Return speed adjusted for difficulty and game speed ramp */
 static fix16 scaled_speed(const Enemy *e, fix16 base_speed)
 {
-    /* difficulty scale: enemy speed_scale is a percentage (100 = normal) */
-    fix16 s = fix16Div(fix16Mul(base_speed, FIX16(e->speed_scale)), FIX16(100));
-    /* game speed ramp (g_game_speed = FIX16(1) normally, >1 when over par) */
-    return fix16Mul(s, g_game_speed);
+    /* Apply difficulty speed_scale (a plain integer percentage, e.g. 100 = normal).
+     * Use integer multiply to avoid fix16Mul overflow:
+     *   fix16Mul(base_speed, FIX16(speed_scale)) overflows s32 because
+     *   FIX16(speed_scale) can be FIX16(160) = 10,485,760 — far too large.
+     * Correct: (s32)base_speed * speed_scale / 100  stays within s32.
+     *   Max: FIX16(1.5) * 160 / 100 = 98304 * 160 / 100 = 157,286 = FIX16(2.4). */
+    fix16 s = (fix16)((s32)base_speed * (u8)e->speed_scale / 100);
+
+    /* Apply game speed ramp.  g_game_speed is normally FIX16(1), rising to
+     * FIX16(3) when over par.  fix16Mul(s, g_game_speed) would overflow s32
+     * (FIX16(2.4) * FIX16(3) intermediate ≈ 30 billion).  Use s64 cast. */
+    return (fix16)(((s64)s * g_game_speed) >> 16);
 }
 
 /* ============================================================
@@ -149,13 +157,20 @@ static fix16 scaled_speed(const Enemy *e, fix16 base_speed)
  * ============================================================ */
 static void move_toward(Enemy *e, fix16 tx, fix16 ty, fix16 speed)
 {
-    fix16 dx = fix16Sub(tx, e->x);
-    fix16 dy = fix16Sub(ty, e->y);
-    fix16 dist = fix16Add(fix16Abs(dx), fix16Abs(dy));   /* Manhattan approx */
-    if (dist < FIX16(1)) return;
+    /* Overflow-safe direction scaling, matching original Pascal:
+     *   delx := longint(delx) * speed div temp * gamespeed div 64
+     *
+     * fix16Mul(dx, speed) overflows s32 when dx > ~1px because fix16
+     * world coords can be up to FIX16(392). We must extract integer pixels
+     * first, then scale: (s32)dx_i * speed / dist_i stays within s32.
+     * Max: 392 * FIX16(1.1) = 392 * 72090 = 28,259,280 — well within s32. */
+    s16 dx_i = fix16ToInt(fix16Sub(tx, e->x));
+    s16 dy_i = fix16ToInt(fix16Sub(ty, e->y));
+    s16 dist_i = (s16)(abs(dx_i) + abs(dy_i));
+    if (dist_i < 1) return;
     speed = scaled_speed(e, speed);
-    e->vx = fix16Div(fix16Mul(dx, speed), dist);
-    e->vy = fix16Div(fix16Mul(dy, speed), dist);
+    e->vx = (fix16)((s32)dx_i * speed / dist_i);
+    e->vy = (fix16)((s32)dy_i * speed / dist_i);
 }
 
 /* ============================================================
@@ -164,12 +179,12 @@ static void move_toward(Enemy *e, fix16 tx, fix16 ty, fix16 speed)
 static void move_away(Enemy *e, fix16 tx, fix16 ty, fix16 speed) __attribute__((unused));
 static void move_away(Enemy *e, fix16 tx, fix16 ty, fix16 speed)
 {
-    fix16 dx = fix16Sub(e->x, tx);
-    fix16 dy = fix16Sub(e->y, ty);
-    fix16 dist = fix16Add(fix16Abs(dx), fix16Abs(dy));
-    if (dist < FIX16(1)) return;
-    e->vx = fix16Div(fix16Mul(dx, speed), dist);
-    e->vy = fix16Div(fix16Mul(dy, speed), dist);
+    s16 dx_i = fix16ToInt(fix16Sub(e->x, tx));
+    s16 dy_i = fix16ToInt(fix16Sub(e->y, ty));
+    s16 dist_i = (s16)(abs(dx_i) + abs(dy_i));
+    if (dist_i < 1) return;
+    e->vx = (fix16)((s32)dx_i * speed / dist_i);
+    e->vy = (fix16)((s32)dy_i * speed / dist_i);
 }
 
 /* ============================================================
@@ -328,12 +343,13 @@ static void ai_meeby(Enemy *e, GameData *gd)
     /* Rotate velocity by the curve matrix every frame */
     if (e->curvesin != 0)
     {
-        /* new_vx = vx*cos - vy*sin  (curvecos/curvesin are Q15, i.e. ×32767)
-         * fix16 is typedef s32 in SGDK — the value is already the raw bits. */
+        /* Rotate velocity vector: new_vx = vx*cos - vy*sin (Q15 trig).
+         * vx can be FIX16(2.4) = 157286; curvecos max = 32767.
+         * 157286 * 32767 overflows s32 — must use s64. */
         s32 vx32 = (s32)e->vx;
         s32 vy32 = (s32)e->vy;
-        s32 nvx = (vx32 * (s32)e->curvecos - vy32 * (s32)e->curvesin) >> 15;
-        s32 nvy = (vy32 * (s32)e->curvecos + vx32 * (s32)e->curvesin) >> 15;
+        s32 nvx = (s32)(((s64)vx32 * e->curvecos - (s64)vy32 * e->curvesin) >> 15);
+        s32 nvy = (s32)(((s64)vy32 * e->curvecos + (s64)vx32 * e->curvesin) >> 15);
         e->vx = (fix16)nvx;
         e->vy = (fix16)nvy;
     }
@@ -423,13 +439,13 @@ static void ai_doinger(Enemy *e, GameData *gd)
     if ((g_frame_count % fire_interval) == 0)
     {
         fix16 spd = FIX16(1.8);   /* matches emisskind[1] mspeed=120/64 */
-        fix16 dx = fix16Sub(gd->player.x, e->x);
-        fix16 dy = fix16Sub(gd->player.y, e->y);
-        fix16 dist = fix16Add(fix16Abs(dx), fix16Abs(dy));
-        if (dist > FIX16(1))
+        s16 dx_i = fix16ToInt(fix16Sub(gd->player.x, e->x));
+        s16 dy_i = fix16ToInt(fix16Sub(gd->player.y, e->y));
+        s16 dist_i = (s16)(abs(dx_i) + abs(dy_i));
+        if (dist_i > 0)
             bullet_fire(gd, e->x, e->y,
-                        fix16Div(fix16Mul(dx, spd), dist),
-                        fix16Div(fix16Mul(dy, spd), dist), BULLET_GREEN);
+                        (fix16)((s32)dx_i * spd / dist_i),
+                        (fix16)((s32)dy_i * spd / dist_i), BULLET_GREEN);
     }
 }
 
@@ -442,15 +458,15 @@ static void ai_snipe(Enemy *e, GameData *gd)
     if (e->ai_timer >= 150)
     {
         e->ai_timer = 0;
-        fix16 dx = fix16Sub(gd->player.x, e->x);
-        fix16 dy = fix16Sub(gd->player.y, e->y);
-        fix16 dist = fix16Add(fix16Abs(dx), fix16Abs(dy));
-        if (dist > FIX16(1))
+        fix16 spd = FIX16(2.3);   /* emisskind[5] mspeed=150/64 */
+        s16 dx_i = fix16ToInt(fix16Sub(gd->player.x, e->x));
+        s16 dy_i = fix16ToInt(fix16Sub(gd->player.y, e->y));
+        s16 dist_i = (s16)(abs(dx_i) + abs(dy_i));
+        if (dist_i > 0)
         {
-            fix16 spd = FIX16(2.3);   /* emisskind[5] mspeed=150/64 */
             bullet_fire(gd, e->x, e->y,
-                        fix16Div(fix16Mul(dx, spd), dist),
-                        fix16Div(fix16Mul(dy, spd), dist), BULLET_YELLOW);
+                        (fix16)((s32)dx_i * spd / dist_i),
+                        (fix16)((s32)dy_i * spd / dist_i), BULLET_YELLOW);
             sfx_play(SFX_ENEMY_SHOOT);
         }
     }
@@ -483,9 +499,11 @@ static void ai_buckshot(Enemy *e, GameData *gd)
         fix16 spd = FIX16(2.3);   /* emisskind[4] mspeed=150/64 */
         for (u8 d = 0; d < 8; d++)
         {
+            /* DIR_DVX/DVY are fix16 unit components (~[-1,1]).
+             * fix16Mul would overflow s32; use s64 intermediate. */
             bullet_fire(gd, e->x, e->y,
-                        fix16Mul(DIR_DVX[d], spd),
-                        fix16Mul(DIR_DVY[d], spd), BULLET_BUCKSHOT);
+                        (fix16)(((s64)DIR_DVX[d] * spd) >> 16),
+                        (fix16)(((s64)DIR_DVY[d] * spd) >> 16), BULLET_BUCKSHOT);
         }
         sfx_play(SFX_ENEMY_SHOOT);
     }
@@ -515,30 +533,35 @@ static void ai_sticktight(Enemy *e, GameData *gd)
     fix16 dy = fix16Abs(fix16Sub(gd->player.y, e->y));
     if (dx < FIX16(20) && dy < FIX16(20))
     {
-        /* Orbit: add perpendicular component */
-        fix16 perp_x = fix16Sub(FIX16(0), e->vy);
-        fix16 perp_y = e->vx;
-        e->vx = fix16Add(e->vx, fix16Mul(perp_x, FIX16(0.3)));
-        e->vy = fix16Add(e->vy, fix16Mul(perp_y, FIX16(0.3)));
+        /* Orbit: add perpendicular component (velocity rotated 90°).
+         * perp_x/perp_y are velocity-scale fix16 values; fix16Mul overflows
+         * s32 for speeds above ~0.18 px/frame — use s64 intermediate. */
+        fix16 perp_x = -e->vy;
+        fix16 perp_y =  e->vx;
+        e->vx = fix16Add(e->vx, (fix16)(((s64)perp_x * FIX16(0.3)) >> 16));
+        e->vy = fix16Add(e->vy, (fix16)(((s64)perp_y * FIX16(0.3)) >> 16));
     }
 }
 
 static void ai_repulsor(Enemy *e, GameData *gd)
 {
-    /* Pushes player away with a powerful force field */
-    fix16 dx = fix16Sub(gd->player.x, e->x);
-    fix16 dy = fix16Sub(gd->player.y, e->y);
-    fix16 dist = fix16Add(fix16Abs(dx), fix16Abs(dy));
+    /* Pushes player away with a powerful force field.
+     * Push direction = (player - repulsor): positive dx_i means player is
+     * to the right of repulsor, so we push player further right. */
+    s16 dx_i  = fix16ToInt(fix16Sub(gd->player.x, e->x));
+    s16 dy_i  = fix16ToInt(fix16Sub(gd->player.y, e->y));
+    s16 dist_i = (s16)(abs(dx_i) + abs(dy_i));
 
-    if (dist < FIX16(96) && dist > FIX16(1))
+    if (dist_i > 0 && dist_i < 96)
     {
-        /* Push player away - inversely proportional to distance */
-        fix16 force = fix16Div(FIX16(12), dist);
-        gd->player.vx = fix16Add(gd->player.vx, fix16Div(fix16Mul(dx, force), dist));
-        gd->player.vy = fix16Add(gd->player.vy, fix16Div(fix16Mul(dy, force), dist));
+        /* Force inversely proportional to distance: FIX16(12) / dist_i.
+         * Max: dist_i=1 → force=FIX16(12); dist_i=95 → force≈FIX16(0.13). */
+        fix16 force = FIX16(12) / dist_i;
+        gd->player.vx = fix16Add(gd->player.vx, (fix16)((s32)dx_i * force / dist_i));
+        gd->player.vy = fix16Add(gd->player.vy, (fix16)((s32)dy_i * force / dist_i));
     }
 
-    /* Repulsor itself drifts slowly */
+    /* Repulsor itself drifts slowly toward player */
     if ((g_frame_count & 0x1F) == 0)
         move_toward(e, gd->player.x, gd->player.y, FIX16(0.3));
 }
@@ -581,10 +604,12 @@ void enemies_update(GameData *gd)
          * curve bends it each frame (matching original curvesin/curvecos logic). */
         if (e->curvesin != 0)
         {
+            /* Q15 rotation: vx*cos - vy*sin. Use s64 to avoid overflow
+             * (velocity fix16 * curvecos s16 exceeds s32 at speeds > ~0.1). */
             s32 vx32 = (s32)e->vx;
             s32 vy32 = (s32)e->vy;
-            s32 nvx = (vx32 * (s32)e->curvecos - vy32 * (s32)e->curvesin) >> 15;
-            s32 nvy = (vy32 * (s32)e->curvecos + vx32 * (s32)e->curvesin) >> 15;
+            s32 nvx = (s32)(((s64)vx32 * e->curvecos - (s64)vy32 * e->curvesin) >> 15);
+            s32 nvy = (s32)(((s64)vy32 * e->curvecos + (s64)vx32 * e->curvesin) >> 15);
             e->vx = (fix16)nvx;
             e->vy = (fix16)nvy;
         }

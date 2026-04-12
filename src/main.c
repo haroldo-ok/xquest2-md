@@ -182,6 +182,10 @@ void game_run(void)
         bullets_update(&gd);
         gems_update(&gd);
         mines_update(&gd);
+        powercharges_update(&gd);
+        explosions_update(&gd);
+        supercrystals_update(&gd);
+        powerup_tick(&gd);
         collision_check_all(&gd);
         player2_collision(&gd);         /* no-op if g_two_player == FALSE */
         level_check_complete(&gd);

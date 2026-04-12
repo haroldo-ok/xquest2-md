@@ -108,8 +108,10 @@ void player_init(Player *p, fix16 x, fix16 y)
     p->smartbombs    = 3;
     p->score         = 0;
     p->shoot_cooldown = 0;
-    p->invincible    = 0;
-    p->active        = TRUE;
+    p->invincible     = 0;
+    p->active         = TRUE;
+    /* First extra life at level-1 newman threshold */
+    p->next_life_score = g_levels[0].newman_score;
 
     p->spr = SPR_addSprite(&spr_ship,
                            fix16ToInt(x) - 8,
@@ -167,18 +169,21 @@ void player_update(Player *p, GameData *gd)
         fix16 ax = fix16Abs(p->vx), ay = fix16Abs(p->vy);
         fix16 hi = (ax > ay) ? ax : ay;
         fix16 lo = (ax > ay) ? ay : ax;
-        fix16 approx_len = fix16Add(hi, fix16Mul(lo, FIX16(0.5)));
+        /* Split-shift to avoid fix16Mul overflow (velocity up to FIX16(3.5)).
+         * approx_len = hi + lo*0.5; scale = MAX_SPEED/len; vx *= scale. */
+        fix16 approx_len = fix16Add(hi, (fix16)((s32)(lo >> 8) * FIX16(0.5) >> 8));
         if (approx_len > SHIP_MAX_SPEED && approx_len > FIX16(0.01))
         {
             fix16 scale = fix16Div(SHIP_MAX_SPEED, approx_len);
-            p->vx = fix16Mul(p->vx, scale);
-            p->vy = fix16Mul(p->vy, scale);
+            p->vx = (fix16)((s32)(p->vx >> 8) * scale >> 8);
+            p->vy = (fix16)((s32)(p->vy >> 8) * scale >> 8);
         }
     }
 
     /* Friction */
-    p->vx = fix16Mul(p->vx, SHIP_FRICTION);
-    p->vy = fix16Mul(p->vy, SHIP_FRICTION);
+    /* Split-shift friction multiply — avoids fix16Mul overflow. */
+    p->vx = (fix16)((s32)(p->vx >> 8) * SHIP_FRICTION >> 8);
+    p->vy = (fix16)((s32)(p->vy >> 8) * SHIP_FRICTION >> 8);
 
     /* Integrate position */
     p->x = fix16Add(p->x, p->vx);
@@ -190,9 +195,20 @@ void player_update(Player *p, GameData *gd)
     if (fix16ToInt(p->y) < HUD_HEIGHT) p->y = FIX16(WORLD_H - 1);
     if (fix16ToInt(p->y) >= WORLD_H)   p->y = FIX16(HUD_HEIGHT);
 
-    /* Wall / background collision */
+    /* Wall / background collision.
+     * Shield forces bounce mode regardless of difficulty. */
     if (p->active && p->invincible == 0)
-        player_wall_collide(p, gd);
+    {
+        if (powerup_active(gd, PU_SHIELD))
+        {
+            u8 saved = gd->difficulty;
+            gd->difficulty = 0;
+            player_wall_collide(p, gd);
+            gd->difficulty = saved;
+        }
+        else
+            player_wall_collide(p, gd);
+    }
 
     /* --- Firing (Button A or C) --- */
     if (p->shoot_cooldown > 0)
@@ -200,12 +216,78 @@ void player_update(Player *p, GameData *gd)
 
     if ((joy & (BUTTON_A | BUTTON_C)) && p->shoot_cooldown == 0 && p->dir != DIR_NONE)
     {
-        /* Bullet velocity in current direction */
-        fix16 bvx = fix16Mul(DIR_DVX[p->dir], BULLET_SPEED);
-        fix16 bvy = fix16Mul(DIR_DVY[p->dir], BULLET_SPEED);
+        /* Split-shift avoids fix16Mul overflow (BULLET_SPEED=FIX16(5)). */
+        fix16 bvx = (fix16)((s32)(DIR_DVX[p->dir] >> 8) * BULLET_SPEED >> 8);
+        fix16 bvy = (fix16)((s32)(DIR_DVY[p->dir] >> 8) * BULLET_SPEED >> 8);
+
+        /* AimedFire: redirect toward nearest active enemy */
+        if (powerup_active(gd, PU_AIMEDFIRE))
+        {
+            s16 best_dx = 0, best_dy = 0;
+            u32 best_d  = 0xFFFFFFFFu;
+            Enemy *best_e = NULL;
+            for (u8 ei = 0; ei < MAX_ENEMIES; ei++)
+            {
+                if (!gd->enemies[ei].active) continue;
+                s16 ex = fix16ToInt(fix16Sub(gd->enemies[ei].x, p->x));
+                s16 ey = fix16ToInt(fix16Sub(gd->enemies[ei].y, p->y));
+                u32 d  = (u32)((s32)ex*ex + (s32)ey*ey);
+                if (d < best_d) { best_d=d; best_dx=ex; best_dy=ey; best_e=&gd->enemies[ei]; }
+            }
+            if (best_d < 0xFFFFFFFFu && best_e)
+            {
+                /* Lead shot: aim where enemy will be when bullet arrives.
+                 * frames_to_hit ≈ Manhattan_dist / 5 (BULLET_SPEED = 5 px/f) */
+                s16 di = (s16)(abs(best_dx) + abs(best_dy));
+                if (di > 0) {
+                    s16 ftf = di / 5;
+                    s16 lx  = best_dx + fix16ToInt((fix16)((s32)best_e->vx * ftf));
+                    s16 ly  = best_dy + fix16ToInt((fix16)((s32)best_e->vy * ftf));
+                    s16 ld  = (s16)(abs(lx) + abs(ly));
+                    if (ld > 0) {
+                        bvx = (fix16)((s32)lx * BULLET_SPEED / ld);
+                        bvy = (fix16)((s32)ly * BULLET_SPEED / ld);
+                    } else {
+                        bvx = (fix16)((s32)best_dx * BULLET_SPEED / di);
+                        bvy = (fix16)((s32)best_dy * BULLET_SPEED / di);
+                    }
+                }
+            }
+        }
+
+        /* Fire main bullet */
         bullet_fire(gd, p->x, p->y, bvx, bvy, BULLET_PLAYER);
-        p->shoot_cooldown = SHIP_FIRE_COOLDOWN;
-        sfx_play(SFX_SHOOT);   /* sfx_7 = short sweep / shoot sound */
+
+        /* AssFire: simultaneous rear shot */
+        if (powerup_active(gd, PU_ASSFIRE))
+            bullet_fire(gd, p->x, p->y, -bvx, -bvy, BULLET_PLAYER);
+
+        /* MultiFire: two extra shots at ±10°.
+         * Rotation by ±10°: cos10=0.9848→64534/65536, sin10=0.1736→11380/65536.
+         * Split-shift: shift bvx/bvy >>8 before multiply to stay in s32. */
+        if (powerup_active(gd, PU_MULTIFIRE))
+        {
+            s32 bx = (s32)bvx >> 8, by = (s32)bvy >> 8;
+            /* Left spread (+10°): vx=bx*cos-by*sin, vy=by*cos+bx*sin */
+            fix16 lx = (fix16)((bx*64534 - by*11380) >> 8);
+            fix16 ly = (fix16)((by*64534 + bx*11380) >> 8);
+            /* Right spread (-10°) */
+            fix16 rx = (fix16)((bx*64534 + by*11380) >> 8);
+            fix16 ry = (fix16)((by*64534 - bx*11380) >> 8);
+            bullet_fire(gd, p->x, p->y, lx, ly, BULLET_PLAYER);
+            bullet_fire(gd, p->x, p->y, rx, ry, BULLET_PLAYER);
+            if (powerup_active(gd, PU_ASSFIRE))
+            {
+                bullet_fire(gd, p->x, p->y, -lx, -ly, BULLET_PLAYER);
+                bullet_fire(gd, p->x, p->y, -rx, -ry, BULLET_PLAYER);
+            }
+        }
+
+        /* RapidFire halves the cooldown */
+        p->shoot_cooldown = powerup_active(gd, PU_RAPIDFIRE)
+                            ? (SHIP_FIRE_COOLDOWN / 2)
+                            : SHIP_FIRE_COOLDOWN;
+        sfx_play(SFX_SHOOT);
     }
 
     /* --- SmartBomb (Button B) --- */
@@ -237,12 +319,14 @@ void player_update(Player *p, GameData *gd)
         SPR_setVisibility(p->spr, VISIBLE);
     }
 
-    /* --- Extra life check --- */
-    static u32 next_life_score = SCORE_EXTRA_LIFE_BASE;
-    if (p->score >= next_life_score)
+    /* --- Extra life check (original: BonusShip / NewManScore) ---
+     * Each extra life sets the next threshold to current + newman_score
+     * for this level (or the level-50 value if beyond the table). */
+    while (p->score >= p->next_life_score)
     {
         p->lives = MIN(p->lives + 1, 9);
-        next_life_score += SCORE_EXTRA_LIFE_BASE + (gd->level * 1000);
+        u16 li = (gd->level > 0) ? ((gd->level - 1) % MAX_LEVEL_DATA) : 0;
+        p->next_life_score += g_levels[li].newman_score;
         sfx_play(SFX_EXTRA_LIFE);
     }
 

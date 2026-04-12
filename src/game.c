@@ -185,8 +185,11 @@ void collision_check_all(GameData *gd)
         if (!e->active) continue;
         if (rects_overlap(p->x, p->y, 10, 10, e->x, e->y, 12, 12))
         {
-            player_die(p, gd);
-            return;   /* one death per frame */
+            if (!powerup_active(gd, PU_SHIELD))
+            {
+                player_die(p, gd);
+                return;
+            }
         }
     }
 
@@ -199,8 +202,11 @@ void collision_check_all(GameData *gd)
         {
             m->active = FALSE;
             if (m->spr) { SPR_releaseSprite(m->spr); m->spr = NULL; }
-            player_die(p, gd);
-            return;
+            if (!powerup_active(gd, PU_SHIELD))
+            {
+                player_die(p, gd);
+                return;
+            }
         }
     }
 
@@ -220,22 +226,16 @@ void collision_check_all(GameData *gd)
         }
     }
 
-    /* Player vs PowerCharges */
+    /* Player vs PowerCharges (smartbomb pickups)
+     * Original: collecting the floor attractor always gives +1 smartbomb
+     * and plays the "allright" sound (SFX_POWERUP). Nothing else. */
     for (u8 i = 0; i < MAX_POWERCHARGES; i++)
     {
         PowerCharge *pc = &gd->powercharges[i];
         if (!pc->active) continue;
         if (rects_overlap(p->x, p->y, 10, 10, pc->x, pc->y, 12, 12))
         {
-            /* Random power-up effect */
-            switch (random() % 5)
-            {
-                case 0: p->smartbombs = MIN(p->smartbombs+1, MAX_SMARTBOMBS); break;
-                case 1: p->score += 1000;   break;
-                case 2: p->lives  = MIN(p->lives+1, 9); break;
-                case 3: p->invincible = 255; break;  /* temporary shield (~4 sec) */
-                case 4: p->shoot_cooldown = 0; break; /* rapid fire brief burst */
-            }
+            p->smartbombs = MIN(p->smartbombs + 1, MAX_SMARTBOMBS);
             pc->active = FALSE;
             if (pc->spr) { SPR_releaseSprite(pc->spr); pc->spr = NULL; }
             sfx_play(SFX_POWERUP);
@@ -253,9 +253,19 @@ void collision_check_all(GameData *gd)
             if (!e->active) continue;
             if (rects_overlap(b->x, b->y, 6, 6, e->x, e->y, 12, 12))
             {
-                b->active = FALSE;
-                if (b->spr) { SPR_releaseSprite(b->spr); b->spr = NULL; }
-                e->hp--;
+                /* HeavyFire: bullet pierces (stays active).  Otherwise deactivate. */
+                if (!powerup_active(gd, PU_HEAVYFIRE))
+                {
+                    b->active = FALSE;
+                    if (b->spr) { SPR_releaseSprite(b->spr); b->spr = NULL; }
+                }
+                e->last_hit_by = b->owner;   /* P1=1, P2=2 — for score credit */
+                /* HeavyFire instantly kills (original: enemy.hit:=0).
+                 * Normal fire: decrement HP. */
+                if (powerup_active(gd, PU_HEAVYFIRE))
+                    e->hp = 0;
+                else
+                    e->hp--;
                 if (e->hp <= 0)
                     enemy_die(e, gd);
                 /* Retaliator fires back immediately when hit.
@@ -271,7 +281,7 @@ void collision_check_all(GameData *gd)
                                     (fix16)((s32)dx_i * spd / dist_i),
                                     (fix16)((s32)dy_i * spd / dist_i), BULLET_PURPLE);
                 }
-                break;   /* one bullet hits one enemy per iteration */
+                if (!b->active) break;   /* stopped bullet: move on */
             }
         }
     }
@@ -285,8 +295,11 @@ void collision_check_all(GameData *gd)
         {
             b->active = FALSE;
             if (b->spr) { SPR_releaseSprite(b->spr); b->spr = NULL; }
-            player_die(p, gd);
-            return;
+            if (!powerup_active(gd, PU_SHIELD))
+            {
+                player_die(p, gd);
+                return;
+            }
         }
     }
 }
@@ -358,7 +371,8 @@ void bullet_fire(GameData *gd, fix16 x, fix16 y, fix16 vx, fix16 vy, BulletType 
         if (b->active) continue;
         b->x = x;  b->y = y;
         b->vx = vx; b->vy = vy;
-        b->is_player  = (type == BULLET_PLAYER);
+        b->is_player   = (type == BULLET_PLAYER);
+        b->owner       = (type == BULLET_PLAYER) ? 1 : 0;  /* default: P1 or enemy */
         b->bullet_type = type;
         b->active = TRUE;
         b->spr = SPR_addSprite(BULLET_SPR[type],
@@ -366,6 +380,19 @@ void bullet_fire(GameData *gd, fix16 x, fix16 y, fix16 vx, fix16 vy, BulletType 
                                TILE_ATTR(BULLET_PAL[type], TRUE, FALSE, FALSE));
         if (!b->spr) { b->active = FALSE; return; }
         return;
+    }
+}
+
+/* bullet_fire_ex: like bullet_fire but sets explicit owner (1=P1, 2=P2, 0=enemy) */
+void bullet_fire_ex(GameData *gd, fix16 x, fix16 y,
+                    fix16 vx, fix16 vy, BulletType type, u8 owner)
+{
+    bullet_fire(gd, x, y, vx, vy, type);
+    /* Find the bullet we just created (last active player bullet) and set owner */
+    for (s8 i = MAX_BULLETS - 1; i >= 0; i--)
+    {
+        Bullet *b = &gd->bullets[i];
+        if (b->active && b->is_player) { b->owner = owner; break; }
     }
 }
 
@@ -377,23 +404,53 @@ void bullets_update(GameData *gd)
         if (!b->active) continue;
         b->x = fix16Add(b->x, b->vx);
         b->y = fix16Add(b->y, b->vy);
-        /* Destroy if off screen */
+        /* Boundary handling: Bounce powerup reflects player bullets off walls */
         s16 bx = fix16ToInt(b->x), by = fix16ToInt(b->y);
-        if (bx < 0 || bx >= WORLD_W  || by < HUD_HEIGHT || by >= WORLD_H)
+        if (bx < 0 || bx >= WORLD_W || by < HUD_HEIGHT || by >= WORLD_H)
         {
-            b->active = FALSE;
-            if (b->spr) { SPR_releaseSprite(b->spr); b->spr = NULL; }
-            continue;
+            if (b->is_player && powerup_active(gd, PU_BOUNCE))
+            {
+                /* Reflect: flip the velocity component that caused the exit */
+                if (bx < 0)        { b->x = FIX16(1);             b->vx = fix16Abs(b->vx); }
+                else if (bx >= WORLD_W) { b->x = FIX16(WORLD_W-1); b->vx = -fix16Abs(b->vx); }
+                if (by < HUD_HEIGHT)    { b->y = FIX16(HUD_HEIGHT); b->vy = fix16Abs(b->vy); }
+                else if (by >= WORLD_H) { b->y = FIX16(WORLD_H-1); b->vy = -fix16Abs(b->vy); }
+                bx = fix16ToInt(b->x); by = fix16ToInt(b->y);
+            }
+            else
+            {
+                b->active = FALSE;
+                if (b->spr) { SPR_releaseSprite(b->spr); b->spr = NULL; }
+                continue;
+            }
         }
-        /* Destroy if hits wall tile */
+        /* Wall tile: Bounce reflects player bullets, others are destroyed */
         {
             u8 btx, bty;
             tilemap_cell_at_pixel(bx, by, &btx, &bty);
             if (tilemap_is_solid(gd, btx, bty))
             {
-                b->active = FALSE;
-                if (b->spr) { SPR_releaseSprite(b->spr); b->spr = NULL; }
-                continue;
+                if (b->is_player && powerup_active(gd, PU_BOUNCE))
+                {
+                    /* Reflect on the axis that caused the collision:
+                     * if the tile above/below is clear → horizontal wall → flip vy.
+                     * if the tile left/right is clear  → vertical wall  → flip vx.
+                     * If both solid (corner), flip both. */
+                    u8 tx2, ty2;
+                    tilemap_cell_at_pixel(bx, by - (s16)fix16ToInt(b->vy), &tx2, &ty2);
+                    u8 vert_clear = !tilemap_is_solid(gd, tx2, ty2);
+                    tilemap_cell_at_pixel(bx - (s16)fix16ToInt(b->vx), by, &tx2, &ty2);
+                    u8 horiz_clear = !tilemap_is_solid(gd, tx2, ty2);
+                    if (vert_clear)  b->vy = -b->vy;
+                    if (horiz_clear) b->vx = -b->vx;
+                    if (!vert_clear && !horiz_clear) { b->vx = -b->vx; b->vy = -b->vy; }
+                }
+                else
+                {
+                    b->active = FALSE;
+                    if (b->spr) { SPR_releaseSprite(b->spr); b->spr = NULL; }
+                    continue;
+                }
             }
         }
         SPR_setPosition(b->spr, bx - 4 - gd->cam_x, by - 4 - gd->cam_y);
@@ -435,6 +492,59 @@ void mines_update(GameData *gd)
 }
 
 void mines_draw(GameData *gd) { (void)gd; }
+
+void powercharges_update(GameData *gd)
+{
+    for (u8 i = 0; i < MAX_POWERCHARGES; i++)
+    {
+        PowerCharge *pc = &gd->powercharges[i];
+        if (!pc->active) continue;
+        if (pc->spr) SPR_setPosition(pc->spr,
+            fix16ToInt(pc->x) - 6 - gd->cam_x,
+            fix16ToInt(pc->y) - 6 - gd->cam_y);
+    }
+}
+/* ============================================================
+ * explosions_update — animate one-shot explosion sprites
+ * ============================================================ */
+void explosions_update(GameData *gd)
+{
+    for (u8 i = 0; i < MAX_EXPLOSIONS; i++)
+    {
+        Explosion *ex = &gd->explosions[i];
+        if (!ex->active) continue;
+
+        /* Spawn sprite on first frame */
+        if (!ex->spr)
+        {
+            ex->spr = SPR_addSprite(&spr_explosion,
+                                    fix16ToInt(ex->x) - 11 - gd->cam_x,
+                                    fix16ToInt(ex->y) - 11 - gd->cam_y,
+                                    TILE_ATTR(PAL_ENEMY, TRUE, FALSE, FALSE));
+            if (ex->spr) SPR_setFrame(ex->spr, 0);
+        }
+
+        /* Advance frame every 6 game frames (roughly matches original speed) */
+        ex->frame++;
+        u8 anim_frame = ex->frame / 6;
+
+        if (anim_frame >= 6)   /* spr_explosion has 6 frames, then disappear */
+        {
+            ex->active = FALSE;
+            if (ex->spr) { SPR_releaseSprite(ex->spr); ex->spr = NULL; }
+            continue;
+        }
+
+        if (ex->spr)
+        {
+            SPR_setFrame(ex->spr, anim_frame);
+            SPR_setPosition(ex->spr,
+                            fix16ToInt(ex->x) - 11 - gd->cam_x,
+                            fix16ToInt(ex->y) - 11 - gd->cam_y);
+        }
+    }
+}
+
 
 /* ============================================================
  * smartbomb.c
@@ -514,6 +624,56 @@ void level_generate(GameData *gd, u16 level_num)
                          (u8)(fix16ToInt(mx) / TILE_W),
                          (u8)((fix16ToInt(my) - HUD_HEIGHT) / TILE_H)));
             mine_place(gd, mx, my);
+        }
+    }
+
+    /* ---- Smartbomb pickups (PowerCharges) ----
+     * Original: "smart" objects placed on the level floor.
+     * smartprob=0.2 chance per roll, maxsmart=1 (levels 1-10) or 2 (levels 11+).
+     * Pickup uses spr_powercharge (the attractor sprite from xquest.gfx).
+     * Collecting one always gives +1 smartbomb (handled in collision_check_all). */
+    {
+        /* Release any leftover sprites from the previous level */
+        for (u8 i = 0; i < MAX_POWERCHARGES; i++)
+        {
+            if (gd->powercharges[i].spr)
+            {
+                SPR_releaseSprite(gd->powercharges[i].spr);
+                gd->powercharges[i].spr = NULL;
+            }
+            gd->powercharges[i].active = FALSE;
+        }
+
+        /* Determine count: roll random < 0.2 up to maxsmart times */
+        u8 maxsmart  = (level_num >= 11) ? 2 : 1;
+        u8 num_smarts = 0;
+        while (num_smarts < maxsmart && (random() & 0xFFFF) < 13107u) /* 13107/65535 ≈ 0.2 */
+            num_smarts++;
+
+        for (u8 i = 0; i < num_smarts && i < MAX_POWERCHARGES; i++)
+        {
+            fix16 pcx, pcy;
+            u8 attempts = 0;
+            do {
+                pcx = FIX16(20 + (s16)(random() % (WORLD_W - 40)));
+                pcy = FIX16(HUD_HEIGHT + 20 + (s16)(random() % (WORLD_H - HUD_HEIGHT - 40)));
+                attempts++;
+            } while (attempts < 40 && (
+                tilemap_is_solid(gd,
+                    (u8)(fix16ToInt(pcx) / TILE_W),
+                    (u8)((fix16ToInt(pcy) - HUD_HEIGHT) / TILE_H)) ||
+                /* Stay away from player start position (world centre) */
+                (abs(fix16ToInt(pcx) - WORLD_W/2) + abs(fix16ToInt(pcy) - WORLD_H/2) < 60)
+            ));
+
+            PowerCharge *pc = &gd->powercharges[i];
+            pc->x      = pcx;
+            pc->y      = pcy;
+            pc->active = TRUE;
+            pc->spr    = SPR_addSprite(&spr_powercharge,
+                                       fix16ToInt(pcx) - 6 - gd->cam_x,
+                                       fix16ToInt(pcy) - 6 - gd->cam_y,
+                                       TILE_ATTR(PAL_COLLECT, TRUE, FALSE, FALSE));
         }
     }
 
@@ -764,10 +924,11 @@ void level_check_complete(GameData *gd)
             {
                 u32 secs_under = (par_frames - gd->level_timer) / 60u;
                 time_bonus = secs_under * 500u;
-                if (time_bonus > 5000u) time_bonus = 5000u;
+                /* Original: no cap on time bonus (par - taken) * 500 */
             }
             gd->player.score += time_bonus;
             sfx_play(SFX_LEVEL_CLEAR);
+            screen_level_clear(gd, time_bonus);   /* 2-second fanfare overlay */
             level_next(gd);
             return;   /* gd is now reset; don't touch it further this frame */
         }
@@ -1094,10 +1255,16 @@ void hud_draw(GameData *gd)
         VDP_clearText(0, 0, 20);
         VDP_drawText(buf, 0, 0);
 
-        /* Level (centred) */
-        sprintf(buf, "L%02d", gd->level);
-        VDP_clearText(18, 0, 4);
-        VDP_drawText(buf, 18, 0);
+        /* Level + crystals + timer (centred) */
+        {
+            u16 li2 = (gd->level > 0) ? ((gd->level - 1) % MAX_LEVEL_DATA) : 0;
+            u32 pf2 = (u32)g_levels[li2].time_par * 60u;
+            u16 tl2 = (gd->level_timer < pf2)
+                      ? (u16)((pf2 - gd->level_timer) / 60u) : 0;
+            sprintf(buf, "L%02d C%02d T%03d", gd->level, gd->gems_remaining, tl2);
+        }
+        VDP_clearText(17, 0, 9);
+        VDP_drawText(buf, 17, 0);
 
         /* P2 */
         sprintf(buf, "2:%08lu L%d B%d",
@@ -1109,12 +1276,19 @@ void hud_draw(GameData *gd)
     }
     else
     {
-        /* Single-player HUD */
-        sprintf(buf, "SCORE:%08lu  L%02d  SHIPS:%d  BOMBS:%d",
+        /* Single-player HUD: SCORE / LEVEL / CRYSTALS / SHIPS / BOMBS / TIMER
+         * Matches original: score, level, crystals remaining, lives, bombs, time. */
+        u16 li_hud  = (gd->level > 0) ? ((gd->level - 1) % MAX_LEVEL_DATA) : 0;
+        u32 par_f   = (u32)g_levels[li_hud].time_par * 60u;
+        u16 t_left  = (gd->level_timer < par_f)
+                      ? (u16)((par_f - gd->level_timer) / 60u) : 0;
+        sprintf(buf, "%08lu L%02d C%02d S%d B%d T%03d",
                 gd->player.score,
                 gd->level,
+                gd->gems_remaining,
                 gd->player.lives,
-                gd->player.smartbombs);
+                gd->player.smartbombs,
+                t_left);
         VDP_clearText(0, 0, 40);
         VDP_drawText(buf, 0, 0);
     }
@@ -1186,10 +1360,26 @@ void level_next(GameData *gd)
     /* Clear all active entities */
     SPR_reset();
 
-    /* Re-init player at centre (keeps score/lives) */
-    player_init(&gd->player,
-                FIX16(WORLD_W / 2),
-                FIX16(WORLD_H / 2));
+    /* Reposition player at centre for new level, preserving score/lives/bombs.
+     * We do NOT call player_init (that would reset everything).
+     * Instead: re-create the sprite and reset only movement state. */
+    {
+        Player *p = &gd->player;
+        p->x             = FIX16(WORLD_W / 2);
+        p->y             = FIX16(WORLD_H / 2);
+        p->vx            = FIX16(0);
+        p->vy            = FIX16(0);
+        p->dir           = DIR_RIGHT;
+        p->shoot_cooldown = 0;
+        p->invincible    = 60;   /* brief grace period on level entry */
+        p->active        = TRUE;
+        /* SPR_reset() already freed the old sprite — create a new one */
+        p->spr = SPR_addSprite(&spr_ship,
+                               fix16ToInt(p->x) - 8,
+                               fix16ToInt(p->y) - 8,
+                               TILE_ATTR(PAL_ACTIVE, TRUE, FALSE, FALSE));
+        if (p->spr) SPR_setAnim(p->spr, 0);
+    }
 
     /* Also null enemy/mine/gem/bullet sprite handles — SPR_reset freed them */
     for (u8 i = 0; i < MAX_ENEMIES;    i++) { gd->enemies[i].active = FALSE;    gd->enemies[i].spr    = NULL; }
@@ -1198,6 +1388,9 @@ void level_next(GameData *gd)
     for (u8 i = 0; i < MAX_MINES;      i++) { gd->mines[i].active   = FALSE;    gd->mines[i].spr      = NULL; }
     for (u8 i = 0; i < MAX_EXPLOSIONS; i++) { gd->explosions[i].active = FALSE; gd->explosions[i].spr = NULL; }
     for (u8 i = 0; i < MAX_POWERCHARGES; i++) { gd->powercharges[i].active = FALSE; gd->powercharges[i].spr = NULL; }
+    /* Supercrystals: release sprites (SPR_reset freed them), clear state */
+    for (u8 i = 0; i < MAX_SUPERCRYSTALS; i++) { gd->supercrystals[i].active = FALSE; gd->supercrystals[i].spr = NULL; }
+    /* Powerup timers persist across levels (original keeps powerups active) */
 
     /* Generate new level layout (also creates gate_spr and resets portals) */
     level_generate(gd, gd->level);

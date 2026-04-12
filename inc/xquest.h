@@ -525,7 +525,13 @@ u8   screen_get_difficulty_index(void);
 
 /* ============================================================
  * sram.c
+ * HofEntry is defined in screens.h; forward-declared here to
+ * avoid a circular include (screens.h already includes xquest.h).
  * ============================================================ */
+#ifndef HOF_ENTRY_FWD
+#define HOF_ENTRY_FWD
+typedef struct { char name[13]; u32 score; u16 level; } HofEntry;
+#endif
 u8   sram_load(HofEntry *hof, u8 entries, u8 *difficulty);
 void sram_save(const HofEntry *hof, u8 entries, u8 difficulty);
 void sram_erase(void);

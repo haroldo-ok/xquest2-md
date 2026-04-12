@@ -153,37 +153,29 @@ void player_update(Player *p, GameData *gd)
 
     u16 joy = JOY_readJoypad(JOY_1);
 
-    /* --- Movement --- */
+    /* --- Movement (matches original XQuest 2 direct-input physics)
+     * Original: velocity is set directly to max speed when key held;
+     * no build-up. Friction applied only on key release for brief coast.
+     * Diagonal speed normalised: ≈ SHIP_MAX_SPEED × 0.707 per axis. */
     Direction dir = read_direction(joy);
     if (dir != DIR_NONE)
     {
         p->dir = dir;
-        p->vx = fix16Add(p->vx, fix16Mul(DIR_DVX[dir], SHIP_ACCEL));
-        p->vy = fix16Add(p->vy, fix16Mul(DIR_DVY[dir], SHIP_ACCEL));
+        /* Direct velocity — reach full speed in one frame */
+        u8 diag = (dir == DIR_UP_RIGHT || dir == DIR_UP_LEFT ||
+                   dir == DIR_DOWN_LEFT || dir == DIR_DOWN_RIGHT);
+        /* Diagonal: each axis = MAX × sin(45°) = MAX × 46341/65536 */
+        fix16 spd = diag ? (fix16)((s32)(SHIP_MAX_SPEED >> 8) * 46341 >> 8)
+                          : SHIP_MAX_SPEED;
+        p->vx = (DIR_DVX[dir] > 0) ?  spd : (DIR_DVX[dir] < 0) ? -spd : FIX16(0);
+        p->vy = (DIR_DVY[dir] > 0) ?  spd : (DIR_DVY[dir] < 0) ? -spd : FIX16(0);
     }
-
-    /* Clamp speed using Manhattan-length approximation.
-     * |v| ≈ max(|vx|,|vy|) + 0.5*min(|vx|,|vy|)  (max error ~6%)
-     * Avoids fix16Sqrt which is not available in SGDK 1.70. */
+    else
     {
-        fix16 ax = fix16Abs(p->vx), ay = fix16Abs(p->vy);
-        fix16 hi = (ax > ay) ? ax : ay;
-        fix16 lo = (ax > ay) ? ay : ax;
-        /* Split-shift to avoid fix16Mul overflow (velocity up to FIX16(3.5)).
-         * approx_len = hi + lo*0.5; scale = MAX_SPEED/len; vx *= scale. */
-        fix16 approx_len = fix16Add(hi, (fix16)((s32)(lo >> 8) * FIX16(0.5) >> 8));
-        if (approx_len > SHIP_MAX_SPEED && approx_len > FIX16(0.01))
-        {
-            fix16 scale = fix16Div(SHIP_MAX_SPEED, approx_len);
-            p->vx = (fix16)((s32)(p->vx >> 8) * scale >> 8);
-            p->vy = (fix16)((s32)(p->vy >> 8) * scale >> 8);
-        }
+        /* No input: friction brings ship to a stop */
+        p->vx = (fix16)((s32)(p->vx >> 8) * SHIP_FRICTION >> 8);
+        p->vy = (fix16)((s32)(p->vy >> 8) * SHIP_FRICTION >> 8);
     }
-
-    /* Friction */
-    /* Split-shift friction multiply — avoids fix16Mul overflow. */
-    p->vx = (fix16)((s32)(p->vx >> 8) * SHIP_FRICTION >> 8);
-    p->vy = (fix16)((s32)(p->vy >> 8) * SHIP_FRICTION >> 8);
 
     /* Integrate position */
     p->x = fix16Add(p->x, p->vx);

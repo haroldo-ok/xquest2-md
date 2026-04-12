@@ -150,31 +150,22 @@ void player2_update(GameData *gd)
     else if (down  && !right && !left)   dir = DIR_DOWN;
     else if (right && down)              dir = DIR_DOWN_RIGHT;
 
-    /* Movement */
+    /* Movement — direct velocity, matches original XQuest physics */
     if (dir != DIR_NONE)
     {
         p->dir = dir;
-        p->vx  = fix16Add(p->vx, fix16Mul(P2_DVX[dir], SHIP_ACCEL));
-        p->vy  = fix16Add(p->vy, fix16Mul(P2_DVY[dir], SHIP_ACCEL));
+        u8 diag = (dir == DIR_UP_RIGHT || dir == DIR_UP_LEFT ||
+                   dir == DIR_DOWN_LEFT || dir == DIR_DOWN_RIGHT);
+        fix16 spd = diag ? (fix16)((s32)(SHIP_MAX_SPEED >> 8) * 46341 >> 8)
+                         : SHIP_MAX_SPEED;
+        p->vx = (P2_DVX[dir] > 0) ?  spd : (P2_DVX[dir] < 0) ? -spd : FIX16(0);
+        p->vy = (P2_DVY[dir] > 0) ?  spd : (P2_DVY[dir] < 0) ? -spd : FIX16(0);
     }
-
-    /* Speed clamp — Manhattan-length approximation, no fix16Sqrt needed */
+    else
     {
-        fix16 ax = fix16Abs(p->vx), ay = fix16Abs(p->vy);
-        fix16 hi = (ax > ay) ? ax : ay;
-        fix16 lo = (ax > ay) ? ay : ax;
-        fix16 approx_len = fix16Add(hi, (fix16)((s32)(lo >> 8) * FIX16(0.5) >> 8));
-        if (approx_len > SHIP_MAX_SPEED && approx_len > FIX16(0.01))
-        {
-            fix16 scale = fix16Div(SHIP_MAX_SPEED, approx_len);
-            p->vx = (fix16)((s32)(p->vx >> 8) * scale >> 8);
-            p->vy = (fix16)((s32)(p->vy >> 8) * scale >> 8);
-        }
+        p->vx = (fix16)((s32)(p->vx >> 8) * SHIP_FRICTION >> 8);
+        p->vy = (fix16)((s32)(p->vy >> 8) * SHIP_FRICTION >> 8);
     }
-
-    /* Friction */
-    p->vx = (fix16)((s32)(p->vx >> 8) * SHIP_FRICTION >> 8);
-    p->vy = (fix16)((s32)(p->vy >> 8) * SHIP_FRICTION >> 8);
 
     /* Integrate */
     p->x = fix16Add(p->x, p->vx);

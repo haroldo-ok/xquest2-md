@@ -89,6 +89,12 @@ static void sys_init(void)
     /* Random seed from VDP counter */
     setRandomSeed(GET_VCOUNTER);
 
+    /* Explicitly initialise both ports as standard 3-button pads.
+     * Without this, SGDK may attempt 6-button detection and mis-read
+     * inputs in some emulators (Gens, BlastEm, etc.). */
+    JOY_setSupport(PORT_1, JOY_SUPPORT_3BTN);
+    JOY_setSupport(PORT_2, JOY_SUPPORT_3BTN);
+
     g_frame_count = 0;
 }
 

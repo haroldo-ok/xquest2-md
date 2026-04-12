@@ -538,14 +538,7 @@ void sram_erase(void);
 void sram_startup(void);
 void sram_save_hof(void);
 
-/* ============================================================
- * tilemap.c
- * ============================================================ */
-void tilemap_init(void);
-void tilemap_draw(const GameData *gd);
-void tilemap_draw_cell(const GameData *gd, u8 tx, u8 ty);
-u8   tilemap_is_solid(const GameData *gd, u8 tx, u8 ty);
-void tilemap_cell_at_pixel(s16 px, s16 py, u8 *out_tx, u8 *out_ty);
+/* tilemap.c — declared in tilemap.h (included by files that need it) */
 
 /* ============================================================
  * enemy_variants.c

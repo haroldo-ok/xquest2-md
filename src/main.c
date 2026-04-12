@@ -108,6 +108,11 @@ static void palettes_load(void)
  * ============================================================ */
 void game_init(void)
 {
+    /* Release all sprites from prior screens (title, options, etc.).
+     * Must happen before memset so SPR_addSprite calls in player_init
+     * and level_generate find a clean sprite engine. */
+    SPR_reset();
+
     /* Zero the game state */
     memset(&gd, 0, sizeof(GameData));
 

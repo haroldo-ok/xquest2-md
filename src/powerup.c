@@ -21,6 +21,7 @@
 
 #include <genesis.h>
 #include "xquest.h"
+#include "tilemap.h"
 #include "sfx.h"
 #include "resources.h"
 

@@ -142,15 +142,28 @@ void player2_update(GameData *gd)
     u8 up    = (joy & BUTTON_UP)    != 0;
     u8 down  = (joy & BUTTON_DOWN)  != 0;
 
+    /* Sticky-input diagonal: track H/V axes independently */
+    static s8 p2_lh = 0, p2_lv = 0;
+    static u8 p2_ha = 0, p2_va = 0;
+    if (right)      { p2_lh =  1; p2_ha = 0; }
+    else if (left)  { p2_lh = -1; p2_ha = 0; }
+    else            { if (p2_ha < 4) p2_ha++; }
+    if (up)         { p2_lv = -1; p2_va = 0; }
+    else if (down)  { p2_lv =  1; p2_va = 0; }
+    else            { if (p2_va < 4) p2_va++; }
+    u8 uh = (right || left) || (p2_ha < 3 && p2_lh != 0);
+    u8 uv = (up || down)    || (p2_va < 3 && p2_lv != 0);
+    s8 hv = uh ? p2_lh : 0;
+    s8 vv = uv ? p2_lv : 0;
     Direction dir = DIR_NONE;
-    if      (right && !up && !down)      dir = DIR_RIGHT;
-    else if (right && up)                dir = DIR_UP_RIGHT;
-    else if (up    && !right && !left)   dir = DIR_UP;
-    else if (left  && up)                dir = DIR_UP_LEFT;
-    else if (left  && !up && !down)      dir = DIR_LEFT;
-    else if (left  && down)              dir = DIR_DOWN_LEFT;
-    else if (down  && !right && !left)   dir = DIR_DOWN;
-    else if (right && down)              dir = DIR_DOWN_RIGHT;
+    if      (hv== 1 && vv== 0) dir = DIR_RIGHT;
+    else if (hv== 1 && vv==-1) dir = DIR_UP_RIGHT;
+    else if (hv== 0 && vv==-1) dir = DIR_UP;
+    else if (hv==-1 && vv==-1) dir = DIR_UP_LEFT;
+    else if (hv==-1 && vv== 0) dir = DIR_LEFT;
+    else if (hv==-1 && vv== 1) dir = DIR_DOWN_LEFT;
+    else if (hv== 0 && vv== 1) dir = DIR_DOWN;
+    else if (hv== 1 && vv== 1) dir = DIR_DOWN_RIGHT;
 
     /* Movement — direct velocity, matches original XQuest physics */
     if (dir != DIR_NONE)

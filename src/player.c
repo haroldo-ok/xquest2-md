@@ -131,15 +131,40 @@ static Direction read_direction(u16 joy)
     u8 up    = (joy & BUTTON_UP)    != 0;
     u8 down  = (joy & BUTTON_DOWN)  != 0;
 
-    /* 8-way direction from DPAD */
-    if (right && !up && !down) return DIR_RIGHT;
-    if (right && up)           return DIR_UP_RIGHT;
-    if (up    && !right && !left) return DIR_UP;
-    if (left  && up)           return DIR_UP_LEFT;
-    if (left  && !up && !down) return DIR_LEFT;
-    if (left  && down)         return DIR_DOWN_LEFT;
-    if (down  && !right && !left) return DIR_DOWN;
-    if (right && down)         return DIR_DOWN_RIGHT;
+    /* Track last horizontal and vertical direction independently.
+     * This allows diagonal movement even on keyboards that can't
+     * register two arrow keys simultaneously (keyboard rollover). */
+    static s8 last_h = 0;   /* -1=left, 0=none, +1=right */
+    static s8 last_v = 0;   /* -1=up,   0=none, +1=down  */
+    static u8 h_age  = 0;   /* frames since last H input */
+    static u8 v_age  = 0;   /* frames since last V input */
+
+    if (right)       { last_h =  1; h_age = 0; }
+    else if (left)   { last_h = -1; h_age = 0; }
+    else             { if (h_age < 4) h_age++; }
+
+    if (up)          { last_v = -1; v_age = 0; }
+    else if (down)   { last_v =  1; v_age = 0; }
+    else             { if (v_age < 4) v_age++; }
+
+    /* Use a direction if its key is held OR was pressed very recently */
+    u8 use_h = (right || left) || (h_age < 3 && last_h != 0);
+    u8 use_v = (up || down)    || (v_age < 3 && last_v != 0);
+
+    if (!use_h && !use_v) return DIR_NONE;
+
+    /* Resolve direction from active axes */
+    s8 hv = use_h ? last_h : 0;
+    s8 vv = use_v ? last_v : 0;
+
+    if (hv ==  1 && vv ==  0) return DIR_RIGHT;
+    if (hv ==  1 && vv == -1) return DIR_UP_RIGHT;
+    if (hv ==  0 && vv == -1) return DIR_UP;
+    if (hv == -1 && vv == -1) return DIR_UP_LEFT;
+    if (hv == -1 && vv ==  0) return DIR_LEFT;
+    if (hv == -1 && vv ==  1) return DIR_DOWN_LEFT;
+    if (hv ==  0 && vv ==  1) return DIR_DOWN;
+    if (hv ==  1 && vv ==  1) return DIR_DOWN_RIGHT;
 
     return DIR_NONE;
 }

@@ -131,32 +131,34 @@ static Direction read_direction(u16 joy)
     u8 up    = (joy & BUTTON_UP)    != 0;
     u8 down  = (joy & BUTTON_DOWN)  != 0;
 
-    /* Track last horizontal and vertical direction independently.
-     * This allows diagonal movement even on keyboards that can't
-     * register two arrow keys simultaneously (keyboard rollover). */
-    static s8 last_h = 0;   /* -1=left, 0=none, +1=right */
-    static s8 last_v = 0;   /* -1=up,   0=none, +1=down  */
-    static u8 h_age  = 0;   /* frames since last H input */
-    static u8 v_age  = 0;   /* frames since last V input */
+    /* Latch-based diagonal input: each axis latches independently.
+     * When an axis key is held, that axis is active.
+     * When released, the latch holds for DIAG_HOLD frames.
+     * This produces diagonals even when the keyboard/emulator only
+     * reports one direction key at a time. */
+#define DIAG_HOLD 12   /* ~200ms at 60fps */
+    static s8 h_latch = 0;   /* active H direction: -1 left, 0 none, +1 right */
+    static s8 v_latch = 0;   /* active V direction: -1 up,   0 none, +1 down  */
+    static u8 h_held  = 0;   /* countdown frames H latch remains after key release */
+    static u8 v_held  = 0;   /* countdown frames V latch remains after key release */
 
-    if (right)       { last_h =  1; h_age = 0; }
-    else if (left)   { last_h = -1; h_age = 0; }
-    else             { if (h_age < 10) h_age++; }
+    /* Update H latch */
+    if      (right)  { h_latch =  1; h_held = DIAG_HOLD; }
+    else if (left)   { h_latch = -1; h_held = DIAG_HOLD; }
+    else if (h_held) { h_held--; }          /* hold for a bit after release */
+    else             { h_latch = 0; }        /* fully expired */
 
-    if (up)          { last_v = -1; v_age = 0; }
-    else if (down)   { last_v =  1; v_age = 0; }
-    else             { if (v_age < 10) v_age++; }
+    /* Update V latch */
+    if      (up)     { v_latch = -1; v_held = DIAG_HOLD; }
+    else if (down)   { v_latch =  1; v_held = DIAG_HOLD; }
+    else if (v_held) { v_held--; }
+    else             { v_latch = 0; }
 
-    /* Use a direction if its key is held OR was recently pressed.
-     * 8-frame window (~133ms) handles emulator keyboard polling lag. */
-    u8 use_h = (right || left) || (h_age < 8 && last_h != 0);
-    u8 use_v = (up || down)    || (v_age < 8 && last_v != 0);
+    /* If CURRENT input has both axes, use them directly */
+    s8 hv = (right || left) ? ((right) ? 1 : -1) : h_latch;
+    s8 vv = (up    || down) ? ((up)    ? -1 : 1) : v_latch;
 
-    if (!use_h && !use_v) return DIR_NONE;
-
-    /* Resolve direction from active axes */
-    s8 hv = use_h ? last_h : 0;
-    s8 vv = use_v ? last_v : 0;
+    if (hv == 0 && vv == 0) return DIR_NONE;
 
     if (hv ==  1 && vv ==  0) return DIR_RIGHT;
     if (hv ==  1 && vv == -1) return DIR_UP_RIGHT;
@@ -234,14 +236,12 @@ void player_update(Player *p, GameData *gd)
 
     if ((joy & (BUTTON_A | BUTTON_C)) && p->shoot_cooldown == 0 && p->dir != DIR_NONE)
     {
-        /* Bullet velocity = 2× player velocity in firing direction,
-         * matching original: Shoot(ship.delx shl 1, ship.dely shl 1).
-         * This makes bullets visibly fast relative to the ship. */
+        /* Bullet velocity: fixed speed in firing direction.
+         * Original fired at 2×ship_velocity but that required inertia.
+         * With direct-velocity model, use a high fixed BULLET_SPEED.
+         * BULLET_SPEED = FIX16(8.0) = 8px/frame feels fast and responsive. */
         fix16 bvx = (fix16)((s32)(DIR_DVX[p->dir] >> 8) * BULLET_SPEED >> 8);
         fix16 bvy = (fix16)((s32)(DIR_DVY[p->dir] >> 8) * BULLET_SPEED >> 8);
-        /* Add player velocity so bullets outrun the ship */
-        bvx = fix16Add(bvx, p->vx);
-        bvy = fix16Add(bvy, p->vy);
 
         /* AimedFire: redirect toward nearest active enemy */
         if (powerup_active(gd, PU_AIMEDFIRE))

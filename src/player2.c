@@ -142,19 +142,20 @@ void player2_update(GameData *gd)
     u8 up    = (joy & BUTTON_UP)    != 0;
     u8 down  = (joy & BUTTON_DOWN)  != 0;
 
-    /* Sticky-input diagonal: track H/V axes independently */
-    static s8 p2_lh = 0, p2_lv = 0;
-    static u8 p2_ha = 0, p2_va = 0;
-    if (right)      { p2_lh =  1; p2_ha = 0; }
-    else if (left)  { p2_lh = -1; p2_ha = 0; }
-    else            { if (p2_ha < 10) p2_ha++; }
-    if (up)         { p2_lv = -1; p2_va = 0; }
-    else if (down)  { p2_lv =  1; p2_va = 0; }
-    else            { if (p2_va < 10) p2_va++; }
-    u8 uh = (right || left) || (p2_ha < 8 && p2_lh != 0);
-    u8 uv = (up || down)    || (p2_va < 8 && p2_lv != 0);
-    s8 hv = uh ? p2_lh : 0;
-    s8 vv = uv ? p2_lv : 0;
+    /* Latch-based diagonal: each axis latches for DIAG_HOLD frames */
+#ifndef DIAG_HOLD
+#define DIAG_HOLD 12
+#endif
+    static s8 p2_hl = 0, p2_vl = 0;
+    static u8 p2_hh = 0, p2_vh = 0;
+    if      (right) { p2_hl =  1; p2_hh = DIAG_HOLD; }
+    else if (left)  { p2_hl = -1; p2_hh = DIAG_HOLD; }
+    else if (p2_hh) { p2_hh--; } else { p2_hl = 0; }
+    if      (up)    { p2_vl = -1; p2_vh = DIAG_HOLD; }
+    else if (down)  { p2_vl =  1; p2_vh = DIAG_HOLD; }
+    else if (p2_vh) { p2_vh--; } else { p2_vl = 0; }
+    s8 hv = (right||left) ? (right ? 1 : -1) : p2_hl;
+    s8 vv = (up||down)    ? (up    ? -1 : 1) : p2_vl;
     Direction dir = DIR_NONE;
     if      (hv== 1 && vv== 0) dir = DIR_RIGHT;
     else if (hv== 1 && vv==-1) dir = DIR_UP_RIGHT;
@@ -213,8 +214,6 @@ void player2_update(GameData *gd)
     {
         fix16 bvx = (fix16)((s32)(P2_DVX[p->dir] >> 8) * BULLET_SPEED >> 8);
         fix16 bvy = (fix16)((s32)(P2_DVY[p->dir] >> 8) * BULLET_SPEED >> 8);
-        bvx = fix16Add(bvx, p->vx);
-        bvy = fix16Add(bvy, p->vy);
 
         /* AimedFire: redirect toward nearest enemy */
         if (powerup_active(gd, PU_AIMEDFIRE))

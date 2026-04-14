@@ -60,7 +60,7 @@
 #define SHIP_FRICTION          (FIX16(0.82))   /* applied only when no key held */
 #define SHIP_ACCEL_FRAMES      8               /* frames to reach ~63% of max speed */
 #define SHIP_FIRE_COOLDOWN      6    /* frames between shots */
-#define BULLET_SPEED           (FIX16(5.0))
+#define BULLET_SPEED           (FIX16(8.0))    /* 8 px/frame — fast, crosses 320px screen in ~0.67s */
 
 /* Enemy counts grow with level */
 #define DIFFICULTY_SCALE(lvl)  (MIN((lvl) / 5, 4))

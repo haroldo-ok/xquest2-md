@@ -72,7 +72,9 @@ static void sys_init(void)
     VDP_setPlaneSize(64, 64, TRUE);
 
     /* Initialise SGDK sprite engine with 512 VRAM tiles reserved */
-    SPR_initEx(512);
+    /* 768 tiles: ship(216) + 15 enemy types(~300) + effects(~100) + bullets(~5)
+     * 512 was too small — bullet/effect sprites silently became transparent. */
+    SPR_initEx(768);
 
     /* Set display to hi-res mode (320×224) */
     VDP_setScreenWidth320();
@@ -130,6 +132,13 @@ void game_init(void)
     /* Camera starts centred on the world */
     gd.cam_x = CAM_MAX_X / 2;  /* start viewport centred on world */
     gd.cam_y = CAM_MAX_Y / 2;
+
+    /* Reload palettes — screens (title, options, game_over) may have
+     * modified individual palette entries. */
+    PAL_setPalette(PAL_BG,      pal_bg.data,      CPU);
+    PAL_setPalette(PAL_ACTIVE,  pal_active.data,  CPU);
+    PAL_setPalette(PAL_COLLECT, pal_collect.data, CPU);
+    PAL_setPalette(PAL_ENEMY,   pal_enemy.data,   CPU);
 
     /* Reset game speed ramp */
     g_game_speed = FIX16(1);

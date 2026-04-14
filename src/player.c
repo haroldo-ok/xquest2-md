@@ -54,27 +54,27 @@ static void player_wall_collide(Player *p, GameData *gd)
 
     if (!hit_l && !hit_r && !hit_t && !hit_b) return;
 
-    /* Easy difficulty: rebound (same as original Wimp/Timid with Shield) */
     u8 diff = gd->difficulty;
     if (diff == 0)
     {
+        /* Easy: stop velocity on hit axis and push out of wall.
+         * With direct-velocity physics, zeroing vx/vy is the correct
+         * bounce — the player re-presses to move away. */
         if (hit_l || hit_r)
         {
-            p->vx = hit_l ? fix16Abs(p->vx) : -fix16Abs(p->vx);
-            /* Push out */
-            if (hit_l) p->x = fix16Add(p->x, FIX16(2));
-            else       p->x = fix16Sub(p->x, FIX16(2));
+            p->vx = FIX16(0);
+            if (hit_l) p->x = fix16Add(p->x, FIX16(3));
+            else       p->x = fix16Sub(p->x, FIX16(3));
         }
         if (hit_t || hit_b)
         {
-            p->vy = hit_t ? fix16Abs(p->vy) : -fix16Abs(p->vy);
-            if (hit_t) p->y = fix16Add(p->y, FIX16(2));
-            else       p->y = fix16Sub(p->y, FIX16(2));
+            p->vy = FIX16(0);
+            if (hit_t) p->y = fix16Add(p->y, FIX16(3));
+            else       p->y = fix16Sub(p->y, FIX16(3));
         }
     }
     else
     {
-        /* Normal+ difficulty: die on wall contact */
         player_die(p, gd);
     }
 }

@@ -74,17 +74,19 @@ static void p2_wall_collide(Player *p, GameData *gd)
 
     if (!hit_l && !hit_r && !hit_t && !hit_b) return;
 
-    if (gd->difficulty == 0)   /* Easy: bounce */
+    if (gd->difficulty == 0)
     {
         if (hit_l || hit_r)
         {
-            p->vx = hit_l ? fix16Abs(p->vx) : -fix16Abs(p->vx);
-            p->x  = hit_l ? fix16Add(p->x, FIX16(2)) : fix16Sub(p->x, FIX16(2));
+            p->vx = FIX16(0);
+            if (hit_l) p->x = fix16Add(p->x, FIX16(3));
+            else       p->x = fix16Sub(p->x, FIX16(3));
         }
         if (hit_t || hit_b)
         {
-            p->vy = hit_t ? fix16Abs(p->vy) : -fix16Abs(p->vy);
-            p->y  = hit_t ? fix16Add(p->y, FIX16(2)) : fix16Sub(p->y, FIX16(2));
+            p->vy = FIX16(0);
+            if (hit_t) p->y = fix16Add(p->y, FIX16(3));
+            else       p->y = fix16Sub(p->y, FIX16(3));
         }
     }
     else

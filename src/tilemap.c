@@ -165,11 +165,11 @@ void tilemap_init(void)
 
 void tilemap_draw(const GameData *gd)
 {
-    /* Clear the playfield area of plane B
-     * (leave HUD rows untouched — they're on plane A) */
-    for (u8 vy = VDP_ROW_OFFSET; vy < VDP_ROW_OFFSET + MAP_TILES_H * 2; vy++)
-        for (u8 vx = 0; vx < MAP_TILES_W * 2; vx++)
-            VDP_setTileMapXY(BG_B, 0, vx, vy);
+    /* Clear the ENTIRE plane B first — this removes any title screen or
+     * previous-level tile indices from the VDP columns beyond MAP_TILES_W*2.
+     * Without this, columns 50-63 of the 64-wide VDP plane retain stale
+     * tile data that wraps into view when the camera scrolls. */
+    VDP_clearPlane(BG_B, TRUE);
 
     /* Draw every cell */
     for (u8 ty = 0; ty < MAP_TILES_H; ty++)

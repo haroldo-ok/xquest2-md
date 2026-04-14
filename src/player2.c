@@ -170,12 +170,10 @@ void player2_update(GameData *gd)
     if (dir != DIR_NONE)
     {
         p->dir = dir;
-        u8 diag = (dir == DIR_UP_RIGHT || dir == DIR_UP_LEFT ||
-                   dir == DIR_DOWN_LEFT || dir == DIR_DOWN_RIGHT);
-        fix16 spd = diag ? (fix16)((s32)(SHIP_MAX_SPEED >> 8) * 46341 >> 8)
-                         : SHIP_MAX_SPEED;
-        p->vx = (P2_DVX[dir] > 0) ?  spd : (P2_DVX[dir] < 0) ? -spd : FIX16(0);
-        p->vy = (P2_DVY[dir] > 0) ?  spd : (P2_DVY[dir] < 0) ? -spd : FIX16(0);
+        p->vx = (P2_DVX[dir] > 0) ?  SHIP_MAX_SPEED
+                : (P2_DVX[dir] < 0) ? -SHIP_MAX_SPEED : FIX16(0);
+        p->vy = (P2_DVY[dir] > 0) ?  SHIP_MAX_SPEED
+                : (P2_DVY[dir] < 0) ? -SHIP_MAX_SPEED : FIX16(0);
     }
     else
     {

@@ -189,14 +189,12 @@ void player_update(Player *p, GameData *gd)
     if (dir != DIR_NONE)
     {
         p->dir = dir;
-        /* Direct velocity — reach full speed in one frame */
-        u8 diag = (dir == DIR_UP_RIGHT || dir == DIR_UP_LEFT ||
-                   dir == DIR_DOWN_LEFT || dir == DIR_DOWN_RIGHT);
-        /* Diagonal: each axis = MAX × sin(45°) = MAX × 46341/65536 */
-        fix16 spd = diag ? (fix16)((s32)(SHIP_MAX_SPEED >> 8) * 46341 >> 8)
-                          : SHIP_MAX_SPEED;
-        p->vx = (DIR_DVX[dir] > 0) ?  spd : (DIR_DVX[dir] < 0) ? -spd : FIX16(0);
-        p->vy = (DIR_DVY[dir] > 0) ?  spd : (DIR_DVY[dir] < 0) ? -spd : FIX16(0);
+        /* Direct velocity: set each axis to SHIP_MAX_SPEED independently.
+         * Diagonal is ~41% faster than cardinal — same as original DOS XQuest. */
+        p->vx = (DIR_DVX[dir] > 0) ?  SHIP_MAX_SPEED
+                : (DIR_DVX[dir] < 0) ? -SHIP_MAX_SPEED : FIX16(0);
+        p->vy = (DIR_DVY[dir] > 0) ?  SHIP_MAX_SPEED
+                : (DIR_DVY[dir] < 0) ? -SHIP_MAX_SPEED : FIX16(0);
     }
     else
     {

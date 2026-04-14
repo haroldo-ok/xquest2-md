@@ -141,15 +141,16 @@ static Direction read_direction(u16 joy)
 
     if (right)       { last_h =  1; h_age = 0; }
     else if (left)   { last_h = -1; h_age = 0; }
-    else             { if (h_age < 4) h_age++; }
+    else             { if (h_age < 10) h_age++; }
 
     if (up)          { last_v = -1; v_age = 0; }
     else if (down)   { last_v =  1; v_age = 0; }
-    else             { if (v_age < 4) v_age++; }
+    else             { if (v_age < 10) v_age++; }
 
-    /* Use a direction if its key is held OR was pressed very recently */
-    u8 use_h = (right || left) || (h_age < 3 && last_h != 0);
-    u8 use_v = (up || down)    || (v_age < 3 && last_v != 0);
+    /* Use a direction if its key is held OR was recently pressed.
+     * 8-frame window (~133ms) handles emulator keyboard polling lag. */
+    u8 use_h = (right || left) || (h_age < 8 && last_h != 0);
+    u8 use_v = (up || down)    || (v_age < 8 && last_v != 0);
 
     if (!use_h && !use_v) return DIR_NONE;
 
@@ -233,9 +234,14 @@ void player_update(Player *p, GameData *gd)
 
     if ((joy & (BUTTON_A | BUTTON_C)) && p->shoot_cooldown == 0 && p->dir != DIR_NONE)
     {
-        /* Split-shift avoids fix16Mul overflow (BULLET_SPEED=FIX16(5)). */
+        /* Bullet velocity = 2× player velocity in firing direction,
+         * matching original: Shoot(ship.delx shl 1, ship.dely shl 1).
+         * This makes bullets visibly fast relative to the ship. */
         fix16 bvx = (fix16)((s32)(DIR_DVX[p->dir] >> 8) * BULLET_SPEED >> 8);
         fix16 bvy = (fix16)((s32)(DIR_DVY[p->dir] >> 8) * BULLET_SPEED >> 8);
+        /* Add player velocity so bullets outrun the ship */
+        bvx = fix16Add(bvx, p->vx);
+        bvy = fix16Add(bvy, p->vy);
 
         /* AimedFire: redirect toward nearest active enemy */
         if (powerup_active(gd, PU_AIMEDFIRE))

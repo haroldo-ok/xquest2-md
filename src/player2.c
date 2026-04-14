@@ -147,12 +147,12 @@ void player2_update(GameData *gd)
     static u8 p2_ha = 0, p2_va = 0;
     if (right)      { p2_lh =  1; p2_ha = 0; }
     else if (left)  { p2_lh = -1; p2_ha = 0; }
-    else            { if (p2_ha < 4) p2_ha++; }
+    else            { if (p2_ha < 10) p2_ha++; }
     if (up)         { p2_lv = -1; p2_va = 0; }
     else if (down)  { p2_lv =  1; p2_va = 0; }
-    else            { if (p2_va < 4) p2_va++; }
-    u8 uh = (right || left) || (p2_ha < 3 && p2_lh != 0);
-    u8 uv = (up || down)    || (p2_va < 3 && p2_lv != 0);
+    else            { if (p2_va < 10) p2_va++; }
+    u8 uh = (right || left) || (p2_ha < 8 && p2_lh != 0);
+    u8 uv = (up || down)    || (p2_va < 8 && p2_lv != 0);
     s8 hv = uh ? p2_lh : 0;
     s8 vv = uv ? p2_lv : 0;
     Direction dir = DIR_NONE;
@@ -213,6 +213,8 @@ void player2_update(GameData *gd)
     {
         fix16 bvx = (fix16)((s32)(P2_DVX[p->dir] >> 8) * BULLET_SPEED >> 8);
         fix16 bvy = (fix16)((s32)(P2_DVY[p->dir] >> 8) * BULLET_SPEED >> 8);
+        bvx = fix16Add(bvx, p->vx);
+        bvy = fix16Add(bvy, p->vy);
 
         /* AimedFire: redirect toward nearest enemy */
         if (powerup_active(gd, PU_AIMEDFIRE))

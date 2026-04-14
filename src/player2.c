@@ -210,8 +210,17 @@ void player2_update(GameData *gd)
     if (p->shoot_cooldown > 0) p->shoot_cooldown--;
     if ((joy & (BUTTON_A | BUTTON_C)) && p->shoot_cooldown == 0 && p->dir != DIR_NONE)
     {
-        fix16 bvx = (fix16)((s32)(P2_DVX[p->dir] >> 8) * BULLET_SPEED >> 8);
-        fix16 bvy = (fix16)((s32)(P2_DVY[p->dir] >> 8) * BULLET_SPEED >> 8);
+        static const fix16 BUL_VX[8] = {
+             FIX16(8), FIX16(8), FIX16(0), FIX16(-8),
+            FIX16(-8),FIX16(-8), FIX16(0),  FIX16(8)
+        };
+        static const fix16 BUL_VY[8] = {
+             FIX16(0),FIX16(-8),FIX16(-8), FIX16(-8),
+             FIX16(0), FIX16(8), FIX16(8),  FIX16(8)
+        };
+        u8 diri = (p->dir == DIR_NONE) ? 0 : (u8)p->dir;
+        fix16 bvx = BUL_VX[diri];
+        fix16 bvy = BUL_VY[diri];
 
         /* AimedFire: redirect toward nearest enemy */
         if (powerup_active(gd, PU_AIMEDFIRE))

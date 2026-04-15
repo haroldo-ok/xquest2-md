@@ -72,7 +72,9 @@ static void sys_init(void)
     VDP_setPlaneSize(64, 64, TRUE);
 
     /* Initialise SGDK sprite engine with 512 VRAM tiles reserved */
-    SPR_initEx(512);
+    /* 768 tiles: ship(216) + 15 enemy types(~300) + effects(~100) + bullets(~5)
+     * 512 was too small — bullet/effect sprites silently became transparent. */
+    SPR_initEx(768);
 
     /* Set display to hi-res mode (320×224) */
     VDP_setScreenWidth320();
@@ -108,6 +110,11 @@ static void palettes_load(void)
  * ============================================================ */
 void game_init(void)
 {
+    /* Release all sprites from prior screens (title, options, etc.).
+     * Must happen before memset so SPR_addSprite calls in player_init
+     * and level_generate find a clean sprite engine. */
+    SPR_reset();
+
     /* Zero the game state */
     memset(&gd, 0, sizeof(GameData));
 
@@ -119,6 +126,13 @@ void game_init(void)
     /* Camera starts centred on the world */
     gd.cam_x = CAM_MAX_X / 2;  /* start viewport centred on world */
     gd.cam_y = CAM_MAX_Y / 2;
+
+    /* Reload palettes — screens (title, options, game_over) may have
+     * modified individual palette entries. */
+    PAL_setPalette(PAL_BG,      pal_bg.data,      CPU);
+    PAL_setPalette(PAL_ACTIVE,  pal_active.data,  CPU);
+    PAL_setPalette(PAL_COLLECT, pal_collect.data, CPU);
+    PAL_setPalette(PAL_ENEMY,   pal_enemy.data,   CPU);
 
     /* Reset game speed ramp */
     g_game_speed = FIX16(1);
@@ -182,6 +196,10 @@ void game_run(void)
         bullets_update(&gd);
         gems_update(&gd);
         mines_update(&gd);
+        powercharges_update(&gd);
+        explosions_update(&gd);
+        supercrystals_update(&gd);
+        powerup_tick(&gd);
         collision_check_all(&gd);
         player2_collision(&gd);         /* no-op if g_two_player == FALSE */
         level_check_complete(&gd);

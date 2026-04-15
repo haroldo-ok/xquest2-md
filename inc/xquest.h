@@ -55,11 +55,12 @@
 #define MAX_SMARTBOMBS           9
 
 /* Ship physics (8-direction, inertia-based) */
-#define SHIP_ACCEL             (FIX16(0.18))
-#define SHIP_MAX_SPEED         (FIX16(3.5))
-#define SHIP_FRICTION          (FIX16(0.88))
+#define SHIP_ACCEL             (FIX16(0.156))  /* original: 10/64 px per frame */
+#define SHIP_MAX_SPEED         (FIX16(3.0))    /* original: 640/64 = 10; we cap at 6 for Genesis screen */
+#define SHIP_FRICTION          (FIX16(0.82))   /* applied only when no key held */
+#define SHIP_ACCEL_FRAMES      8               /* frames to reach ~63% of max speed */
 #define SHIP_FIRE_COOLDOWN      6    /* frames between shots */
-#define BULLET_SPEED           (FIX16(5.0))
+#define BULLET_SPEED           (FIX16(8.0))    /* 8 px/frame — fast, crosses 320px screen in ~0.67s */
 
 /* Enemy counts grow with level */
 #define DIFFICULTY_SCALE(lvl)  (MIN((lvl) / 5, 4))
@@ -272,6 +273,7 @@ typedef struct {
     u16   shoot_cooldown;
     u8    invincible;      /* frames of post-death invincibility */
     u8    active;
+    u32   next_life_score; /* score at which next extra life is awarded */
     Sprite *spr;
 } Player;
 
@@ -292,6 +294,7 @@ typedef struct {
     /* Per-enemy speed scale applied at spawn from difficulty settings.
      * 100 = 100% = normal speed. Stored here so AI functions can use it. */
     u8    speed_scale;     /* difficulty speed % (default 100) */
+    u8    last_hit_by;     /* 1=P1, 2=P2 — set on bullet hit, used by enemy_die */
     Sprite *spr;
 } Enemy;
 
@@ -308,6 +311,7 @@ typedef struct {
     fix16 vx, vy;
     u8         active;
     u8         is_player;   /* TRUE = player bullet, FALSE = enemy bullet */
+    u8         owner;        /* 1 = P1, 2 = P2, 0 = enemy */
     BulletType bullet_type; /* selects sprite */
     Sprite *spr;
 } Bullet;
@@ -339,6 +343,45 @@ typedef struct {
     u8    frame;
     Sprite *spr;
 } Explosion;
+
+/* ============================================================
+ * POWERUP SYSTEM
+ * Derived from original xqvars.pas PowerUpType enum and timing.
+ * Durations converted from DOS FrameRate=67 to Genesis 60fps.
+ * ============================================================ */
+typedef enum {
+    PU_SHIELD    = 0,  /* invincible: walls & enemies don't kill        */
+    PU_RAPIDFIRE = 1,  /* fire rate doubled                             */
+    PU_MULTIFIRE = 2,  /* 3-way spread shot (±10° extra bullets)        */
+    PU_ASSFIRE   = 3,  /* simultaneous rear shot (+ with MultiFire: 5)  */
+    PU_AIMEDFIRE = 4,  /* bullets home toward nearest enemy             */
+    PU_HEAVYFIRE = 5,  /* bullets pierce through enemies                */
+    PU_BOUNCE    = 6,  /* bullets bounce off walls                      */
+    PU_COUNT     = 7
+} PowerUpId;
+
+/* Duration ranges (Genesis 60fps frames), matching original timing:
+ * Shield:    10-25s  (600-1500f)
+ * AimedFire: 30-90s  (1800-5400f)
+ * RapidFire, MultiFire, AssFire, HeavyFire: 60-150s (3600-9000f)
+ * Bounce:    30-90s  (1800-5400f) */
+static const u16 PU_DUR_MIN[PU_COUNT] = { 600,3600,3600,3600,1800,3600,1800 };
+static const u16 PU_DUR_RAN[PU_COUNT] = { 900,5400,5400,5400,3600,5400,3600 };
+
+/* ============================================================
+ * SUPERCRYSTAL  — floating pickup that awards a random powerup
+ * Original: type-0 enemy, spawned ~1 per 5 seconds, lasts 5-10s.
+ * ============================================================ */
+#define MAX_SUPERCRYSTALS  2
+
+typedef struct {
+    fix16  x, y;
+    u16    lifetime;   /* frames remaining before auto-despawn */
+    u8     active;
+    u8     anim_frame;
+    u8     anim_timer;
+    Sprite *spr;
+} Supercrystal;
 
 typedef struct {
     Player      player;
@@ -377,6 +420,12 @@ typedef struct {
     Sprite *portal_left_spr;   /* left wall portal sprite  */
     Sprite *portal_right_spr;  /* right wall portal sprite */
 
+    /* Active powerup remaining durations (0 = inactive) */
+    u16  powerup_timer[PU_COUNT];
+
+    /* Supercrystal pickups */
+    Supercrystal supercrystals[MAX_SUPERCRYSTALS];
+
     /* Tile map */
     u8   tilemap[MAP_TILES_H][MAP_TILES_W];   /* 0=floor, 1=wall */
 } GameData;
@@ -411,6 +460,8 @@ void gems_draw(GameData *gd);
 
 /* bullet.c */
 void bullet_fire(GameData *gd, fix16 x, fix16 y, fix16 vx, fix16 vy, BulletType type);
+/* Owner variant: 1=P1, 2=P2, 0=enemy (bullet_fire defaults owner=1 for player, 0 for enemy) */
+void bullet_fire_ex(GameData *gd, fix16 x, fix16 y, fix16 vx, fix16 vy, BulletType type, u8 owner);
 void bullets_update(GameData *gd);
 void bullets_draw(GameData *gd);
 
@@ -418,6 +469,14 @@ void bullets_draw(GameData *gd);
 void mine_place(GameData *gd, fix16 x, fix16 y);
 void mines_update(GameData *gd);
 void mines_draw(GameData *gd);
+void powercharges_update(GameData *gd);
+void explosions_update(GameData *gd);
+void supercrystals_update(GameData *gd);
+
+/* powerup.c — active powerup query helpers */
+u8   powerup_active(const GameData *gd, PowerUpId id);
+void powerup_award(GameData *gd, PowerUpId id);
+void powerup_tick(GameData *gd);
 
 /* smartbomb.c */
 void smartbomb_activate(GameData *gd);
@@ -443,7 +502,58 @@ void camera_update(GameData *gd);
 void hud_draw(GameData *gd);
 void hud_update_score(u32 score);
 
-/* Forward declarations for screens.h and player2.h types */
-struct DifficultySettings;
+/* ============================================================
+ * player2.c
+ * ============================================================ */
+void    player2_init(fix16 x, fix16 y);
+void    player2_update(GameData *gd);
+void    player2_collision(GameData *gd);
+void    player2_die(GameData *gd);
+u8      player2_is_active(void);
+Player *player2_get(void);
+u32     player2_get_score(void);
+
+/* ============================================================
+ * screens.c
+ * ============================================================ */
+void screen_game_over(GameData *gd);
+void screen_hof_enter(GameData *gd);
+void screen_hof_show(void);
+void screen_pause(void);
+void screen_level_clear(GameData *gd, u32 time_bonus);
+u8   screen_options(void);
+u8   screen_get_difficulty_index(void);
+
+/* ============================================================
+ * sram.c
+ * HofEntry is defined in screens.h; forward-declared here to
+ * avoid a circular include (screens.h already includes xquest.h).
+ * ============================================================ */
+#ifndef HOF_ENTRY_FWD
+#define HOF_ENTRY_FWD
+typedef struct { char name[13]; u32 score; u16 level; } HofEntry;
+#endif
+u8   sram_load(HofEntry *hof, u8 entries, u8 *difficulty);
+void sram_save(const HofEntry *hof, u8 entries, u8 difficulty);
+void sram_erase(void);
+void sram_startup(void);
+void sram_save_hof(void);
+
+/* tilemap.c — declared in tilemap.h (included by files that need it) */
+
+/* ============================================================
+ * enemy_variants.c
+ * ============================================================ */
+void ev_init(void);
+void ev_restore_collect_palette(void);
+void ev_apply_to_sprite(EnemyType type, Sprite *spr);
+u8   ev_is_variant(EnemyType type);
+u8   ev_get_anim_offset(EnemyType type);
+
+/* ============================================================
+ * sfx sustained / stop (game.c)
+ * ============================================================ */
+void sfx_play_sustained(u8 sfx_id);
+void sfx_stop(void);
 
 #endif /* XQUEST_H */

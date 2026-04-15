@@ -28,23 +28,26 @@
 #include "enemy_variants.h"
 #include "resources.h"
 
-/* Enemy HP table */
+/* Enemy HP table — matched to original xquest.enm 'hits' field.
+ * Most enemies die in 1 hit. Retaliator takes 5 (original: hits=5).
+ * Vince has rebounds=TRUE in the original (bullets bounce off), making him
+ * nearly unkillable. We simulate this with HP=20. All others: hits=1. */
 static const s16 ENEMY_HP[ENEMY_TYPE_COUNT] = {
-    1,   /* GRUNGER */
-    1,   /* ZIPPO */
-    2,   /* ZINGER */
-   10,   /* VINCE (nearly invulnerable) */
-    1,   /* MINER */
-    5,   /* MEEBY */
-    2,   /* RETALIATOR */
-    1,   /* TERRIER */
-    2,   /* DOINGER */
-    2,   /* SNIPE */
-    1,   /* TRIBBLER */
-    2,   /* BUCKSHOT */
-    3,   /* CLUSTER */
-    3,   /* STICKTIGHT */
-    3,   /* REPULSOR */
+    1,   /* GRUNGER     — hits=1 */
+    1,   /* ZIPPO       — hits=1 */
+    1,   /* ZINGER      — hits=1 */
+   20,   /* VINCE       — rebounds=TRUE, simulated as high HP */
+    1,   /* MINER       — custom enemy, 1-shot */
+    1,   /* MEEBY       — hits=1 (tough due to size, not HP) */
+    5,   /* RETALIATOR  — hits=5 (original value) */
+    1,   /* TERRIER     — hits=1 */
+    1,   /* DOINGER     — hits=1 */
+    1,   /* SNIPE       — hits=1 */
+    1,   /* TRIBBLER    — hits=1 */
+    1,   /* BUCKSHOT    — hits=1 */
+    1,   /* CLUSTER     — hits=1 */
+    1,   /* STICKTIGHT  — hits=1 */
+    1,   /* REPULSOR    — hits=1 */
 };
 
 /* Enemy base speed (fix16) */
@@ -66,23 +69,25 @@ static const fix16 ENEMY_SPEED[ENEMY_TYPE_COUNT] = {
     FIX16(1.2),   /* REPULSOR */
 };
 
-/* Score value per kill */
+/* Score value per kill — matched to original xquest.enm 'score' field.
+ * Miner was the blank slot (index 6) in the original; we assign 500 to
+ * match the adjacent enemy tier. All other values are exact .enm values. */
 static const u16 ENEMY_SCORE[ENEMY_TYPE_COUNT] = {
-    100,  /* GRUNGER */
-    150,  /* ZIPPO */
-    200,  /* ZINGER */
-    500,  /* VINCE */
-    120,  /* MINER */
-    400,  /* MEEBY */
-    250,  /* RETALIATOR */
-    200,  /* TERRIER */
-    180,  /* DOINGER */
-    300,  /* SNIPE */
-    150,  /* TRIBBLER */
-    350,  /* BUCKSHOT */
-    200,  /* CLUSTER */
-    300,  /* STICKTIGHT */
-    400,  /* REPULSOR */
+    200,   /* GRUNGER     — original: 200  */
+    300,   /* ZIPPO       — original: 300  */
+    300,   /* ZINGER      — original: 300  */
+    500,   /* VINCE       — original: 500  */
+    500,   /* MINER       — custom; matches Vince tier */
+    600,   /* MEEBY       — original: 600  */
+   2000,   /* RETALIATOR  — original: 2000 */
+   1000,   /* TERRIER     — original: 1000 */
+   1000,   /* DOINGER     — original: 1000 */
+   1000,   /* SNIPE       — original: 1000 */
+   1250,   /* TRIBBLER    — original: 1250 */
+    500,   /* BUCKSHOT    — original: 500  */
+   1500,   /* CLUSTER     — original: 1500 */
+   5000,   /* STICKTIGHT  — original: 5000 */
+   2000,   /* REPULSOR    — original: 2000 */
 };
 
 /* Sprite definition pointer table — every enemy type uses its own sprite
@@ -676,55 +681,38 @@ void enemy_die(Enemy *e, GameData *gd)
 {
     if (!e->active) return;
 
-    /* Award score */
-    gd->player.score += ENEMY_SCORE[e->type];
+    /* Award score to the player who dealt the killing blow.
+     * last_hit_by: 1=P1 (default), 2=P2. Falls back to P1 in single-player. */
+    if (g_two_player && e->last_hit_by == 2 && player2_is_active())
+    {
+        Player *p2k = player2_get();
+        if (p2k) p2k->score += ENEMY_SCORE[e->type];
+    }
+    else
+        gd->player.score += ENEMY_SCORE[e->type];
 
-    /* Special death effects */
-    if (e->type == ENEMY_TRIBBLER)
+    /* Special death effects — from original .enm flags:
+     *
+     * Sticktight: explodes=1, firetype=6 → fires radial burst of bullets
+     *   on death.  Original Explode() fires up to 15 missiles in all
+     *   directions using sint[]/cost[] tables.  We approximate with 8
+     *   bullets on the 8-way axis grid, matching the port's bullet system.
+     *
+     * Tribbler: tribbles=0 on the Tribbler itself — it just dies.  The
+     *   original's "tribble" mechanic lives on the small Tribble sub-type
+     *   (not in the port's type enum), so no split needed here.
+     *
+     * Cluster/Retaliator: no death effects in the original .enm data. */
+    if (e->type == ENEMY_STICKTIGHT)
     {
-        /* Original spawns 5 tribbles on death (ntyp+1 = next smaller type,
-         * approximated here as ENEMY_GRUNGER for the fast small splits). */
-        u8 spawned = 0;
-        for (u8 i = 0; i < MAX_ENEMIES && spawned < 5; i++)
-        {
-            if (!gd->enemies[i].active)
-            {
-                enemy_spawn(&gd->enemies[i], ENEMY_GRUNGER,
-                            fix16Add(e->x, FIX16((s16)(random() % 24) - 12)),
-                            fix16Add(e->y, FIX16((s16)(random() % 24) - 12)));
-                /* Give each child a random outward velocity */
-                gd->enemies[i].vx = FIX16_FROM_FRAC((s16)(random() % 200) - 100, 50);
-                gd->enemies[i].vy = FIX16_FROM_FRAC((s16)(random() % 200) - 100, 50);
-                spawned++;
-            }
-        }
-    }
-    else if (e->type == ENEMY_CLUSTER)
-    {
-        /* Splits into dangerous fast pieces */
-        for (u8 n = 0; n < 3; n++)
-        {
-            for (u8 i = 0; i < MAX_ENEMIES; i++)
-            {
-                if (!gd->enemies[i].active)
-                {
-                    enemy_spawn(&gd->enemies[i], ENEMY_ZIPPO,
-                                e->x, e->y);
-                    gd->enemies[i].vx = FIX16_FROM_FRAC((random() % 100 - 50) * 4, 100);
-                    gd->enemies[i].vy = FIX16_FROM_FRAC((random() % 100 - 50) * 4, 100);
-                    break;
-                }
-            }
-        }
-    }
-    else if (e->type == ENEMY_RETALIATOR)
-    {
-        /* Fires in all 4 directions on death */
-        fix16 spd = FIX16(3.0);
-        bullet_fire(gd, e->x, e->y,  spd,      FIX16(0), BULLET_PURPLE);
-        bullet_fire(gd, e->x, e->y, FIX16(0),  spd,      BULLET_PURPLE);
-        bullet_fire(gd, e->x, e->y, -spd,      FIX16(0), BULLET_PURPLE);
-        bullet_fire(gd, e->x, e->y, FIX16(0), -spd,      BULLET_PURPLE);
+        /* Radial bullet burst — 8 directions at ~2 px/frame.
+         * Original firetype=6 mspeed≈150/64≈2.3 px/tick. */
+        fix16 spd = FIX16(2.3);
+        for (u8 d = 0; d < 8; d++)
+            bullet_fire(gd, e->x, e->y,
+                        (fix16)((s32)(DIR_DVX[d] >> 8) * spd >> 8),
+                        (fix16)((s32)(DIR_DVY[d] >> 8) * spd >> 8),
+                        BULLET_BUCKSHOT);
         sfx_play(SFX_ENEMY_SHOOT);
     }
 

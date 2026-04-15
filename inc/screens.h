@@ -32,11 +32,14 @@ extern const DifficultySettings difficulty_table[DIFFICULTY_COUNT];
 /* ────────────────────────────────────────────────
  * Hall of Fame entry
  * ──────────────────────────────────────────────── */
+#ifndef HOF_ENTRY_FWD
+#define HOF_ENTRY_FWD
 typedef struct {
     char name[13];   /* null-terminated, max 12 chars */
     u32  score;
     u16  level;
 } HofEntry;
+#endif
 
 /* ────────────────────────────────────────────────
  * Two-player flag (set by options screen)

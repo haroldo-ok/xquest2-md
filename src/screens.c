@@ -251,11 +251,23 @@ void screen_game_over(GameData *gd)
 
     wait_for_button();
 
-    /* Check if score qualifies for HOF */
+    /* Check if scores qualify for HOF — check both players in 2P mode */
     if (!g_hof_initialised) hof_init_defaults();
     if (gd->player.score > g_hof[HOF_MAX_ENTRIES-1].score)
-    {
         screen_hof_enter(gd);
+    if (g_two_player)
+    {
+        Player *p2 = player2_get();
+        if (p2 && p2->score > g_hof[HOF_MAX_ENTRIES-1].score)
+        {
+            /* Temporarily swap P2 score/level into gd for reuse of screen_hof_enter */
+            u32 saved_score = gd->player.score;
+            u16 saved_level = gd->level;
+            gd->player.score = p2->score;
+            gd->level = saved_level;
+            screen_hof_enter(gd);
+            gd->player.score = saved_score;
+        }
     }
 }
 

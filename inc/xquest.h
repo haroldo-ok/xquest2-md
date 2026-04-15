@@ -56,7 +56,7 @@
 
 /* Ship physics (8-direction, inertia-based) */
 #define SHIP_ACCEL             (FIX16(0.156))  /* original: 10/64 px per frame */
-#define SHIP_MAX_SPEED         (FIX16(3.0))    /* original: 640/64 = 10; we cap at 6 for Genesis screen */
+#define SHIP_MAX_SPEED         (FIX16(2.0))    /* original: ~9px/frame at 60fps; adjusted for Genesis scrolling feel */
 #define SHIP_FRICTION          (FIX16(0.82))   /* applied only when no key held */
 #define SHIP_ACCEL_FRAMES      8               /* frames to reach ~63% of max speed */
 #define SHIP_FIRE_COOLDOWN      6    /* frames between shots */

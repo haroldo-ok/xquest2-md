@@ -127,6 +127,11 @@ void game_init(void)
     gd.cam_x = CAM_MAX_X / 2;  /* start viewport centred on world */
     gd.cam_y = CAM_MAX_Y / 2;
 
+    /* Re-seed RNG each game using frame count + VCounter for entropy.
+     * Without this, emulators always start with VCounter=0 giving
+     * the same seed and thus the same object positions every run. */
+    setRandomSeed(g_frame_count ^ (u32)GET_VCOUNTER ^ 0xA5A5);
+
     /* Reload palettes — screens (title, options, game_over) may have
      * modified individual palette entries. */
     PAL_setPalette(PAL_BG,      pal_bg.data,      CPU);
